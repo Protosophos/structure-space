@@ -2,5 +2,5 @@ hallo
 moin
 
 hallo
-d
-dd
+
+Ich habe mal einen Ordner sofa erstellt, ein python-Script reingepackt und eine Readme die erklärt was man mit pip installieren muss und wie man es dann ausführt.
