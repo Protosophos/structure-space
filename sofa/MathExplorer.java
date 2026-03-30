@@ -66,6 +66,7 @@ public class MathExplorer extends JFrame {
         tabbedPane.addTab("Photon", new PhotonPanel());
         tabbedPane.addTab("Spacetime", new SpacetimePanel());
         tabbedPane.addTab("Redshift", new RedshiftPanel());
+        tabbedPane.addTab("Uwe Formula", new UweFormulaPanel());
         tabbedPane.addTab("Overview", new OverviewPanel(tabbedPane));
 
         add(tabbedPane);
@@ -4870,6 +4871,436 @@ public class MathExplorer extends JFrame {
     }
 
     // =====================================================================
+    // TAB: Uwe Formula - Near-unity relation between phi, pi, and e
+    // =====================================================================
+
+    /**
+     * Panel visualizing the Uwe Formula: F = (1/phi - 1/pi)(1/phi + e) near 1.
+     * Shows the function F(c), continued fraction comparison, residual analysis,
+     * and the equivalent form e = (pi+1)/(pi-phi).
+     */
+    static class UweFormulaPanel extends JPanel {
+        private double cValue = Math.E;
+        private int animFrame = 0;
+        private javax.swing.Timer animTimer;
+        private JSlider cSlider;
+        private boolean showZoom = false;
+
+        private static final double INV_PHI = 1.0 / PHI;
+        private static final double INV_PI = 1.0 / Math.PI;
+        private static final double A_MINUS_P = INV_PHI - INV_PI;
+        private static final double C_EXACT = (Math.PI + 1) / (Math.PI - PHI);
+
+        /**
+         * Constructs the Uwe Formula panel.
+         */
+        public UweFormulaPanel() {
+            setLayout(new BorderLayout());
+            setBackground(PANEL_BG);
+
+            // Sidebar
+            JPanel sidebar = new JPanel();
+            sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
+            sidebar.setBackground(new Color(25, 25, 45));
+            sidebar.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+            sidebar.setPreferredSize(new Dimension(280, 0));
+
+            JLabel title = new JLabel("Uwe Formula");
+            title.setForeground(ACCENT);
+            title.setFont(new Font("SansSerif", Font.BOLD, 18));
+            title.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(title);
+            sidebar.add(Box.createVerticalStrut(8));
+
+            JTextArea info = new JTextArea(
+                "The Uwe Formula:\n\n" +
+                "F = (1/phi - 1/pi)(1/phi + c)\n\n" +
+                "When c = e (Euler's number),\n" +
+                "F = 0.99997426...\n" +
+                "remarkably close to 1.\n\n" +
+                "Equivalent form:\n" +
+                "F = 1 exactly when\n" +
+                "c = (pi+1)/(pi-phi)\n" +
+                "  = 2.71836...\n\n" +
+                "e = 2.71828...\n\n" +
+                "The plot shows F(c) as\n" +
+                "a function of c. The red\n" +
+                "marker shows c = e."
+            );
+            info.setEditable(false);
+            info.setBackground(new Color(35, 35, 60));
+            info.setForeground(new Color(200, 200, 220));
+            info.setFont(new Font("Monospaced", Font.PLAIN, 11));
+            info.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+            info.setMaximumSize(new Dimension(260, 280));
+            info.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(info);
+            sidebar.add(Box.createVerticalStrut(12));
+
+            // c slider
+            JLabel cLabel = new JLabel("Value of c");
+            cLabel.setForeground(Color.WHITE);
+            cLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+            cLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(cLabel);
+            sidebar.add(Box.createVerticalStrut(3));
+
+            // Slider: 0 to 600 maps to c = 0.0 to 6.0
+            cSlider = new JSlider(0, 600, (int)(Math.E * 100));
+            cSlider.setBackground(new Color(25, 25, 45));
+            cSlider.setForeground(Color.WHITE);
+            cSlider.setMaximumSize(new Dimension(260, 30));
+            cSlider.setAlignmentX(Component.LEFT_ALIGNMENT);
+            cSlider.addChangeListener(ev -> {
+                cValue = cSlider.getValue() / 100.0;
+                repaint();
+            });
+            sidebar.add(cSlider);
+            sidebar.add(Box.createVerticalStrut(5));
+
+            // Preset buttons
+            JButton eBtn = createDarkButton("c = e (2.71828...)");
+            eBtn.setMaximumSize(new Dimension(260, 26));
+            eBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+            eBtn.addActionListener(ev -> { cValue = Math.E; cSlider.setValue((int)(Math.E * 100)); });
+            sidebar.add(eBtn);
+            sidebar.add(Box.createVerticalStrut(3));
+
+            JButton exactBtn = createDarkButton("c = c_exact (2.71836...)");
+            exactBtn.setMaximumSize(new Dimension(260, 26));
+            exactBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+            exactBtn.addActionListener(ev -> { cValue = C_EXACT; cSlider.setValue((int)(C_EXACT * 100)); });
+            sidebar.add(exactBtn);
+            sidebar.add(Box.createVerticalStrut(3));
+
+            JButton piBtn = createDarkButton("c = pi");
+            piBtn.setMaximumSize(new Dimension(260, 26));
+            piBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+            piBtn.addActionListener(ev -> { cValue = Math.PI; cSlider.setValue((int)(Math.PI * 100)); });
+            sidebar.add(piBtn);
+            sidebar.add(Box.createVerticalStrut(3));
+
+            JButton phiBtn = createDarkButton("c = phi");
+            phiBtn.setMaximumSize(new Dimension(260, 26));
+            phiBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+            phiBtn.addActionListener(ev -> { cValue = PHI; cSlider.setValue((int)(PHI * 100)); });
+            sidebar.add(phiBtn);
+            sidebar.add(Box.createVerticalStrut(12));
+
+            // Zoom toggle
+            JButton zoomBtn = createDarkButton("Toggle Zoom near F=1");
+            zoomBtn.setBackground(new Color(52, 152, 219));
+            zoomBtn.setMaximumSize(new Dimension(260, 30));
+            zoomBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+            zoomBtn.addActionListener(ev -> { showZoom = !showZoom; repaint(); });
+            sidebar.add(zoomBtn);
+
+            sidebar.add(Box.createVerticalGlue());
+            add(sidebar, BorderLayout.EAST);
+
+            animTimer = new javax.swing.Timer(16, ev -> { animFrame++; repaint(); });
+            animTimer.start();
+        }
+
+        /**
+         * Computes F(c) = (1/phi - 1/pi)(1/phi + c).
+         *
+         * @param c the parameter value
+         * @return F(c)
+         */
+        private double computeF(double c) {
+            return A_MINUS_P * (INV_PHI + c);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g;
+            setupRendering(g2);
+
+            int w = getWidth() - 280;
+            int h = getHeight();
+            g2.setColor(PANEL_BG);
+            g2.fillRect(0, 0, w, h);
+
+            // Title
+            g2.setFont(new Font("SansSerif", Font.BOLD, 18));
+            drawGlowString(g2, "Uwe Formula: F = (1/phi - 1/pi)(1/phi + c)", 20, 28, ACCENT);
+
+            double F = computeF(cValue);
+            double r = 1.0 - F;
+
+            if (showZoom) {
+                drawZoomPlot(g2, w, h);
+            } else {
+                drawMainPlot(g2, w, h);
+            }
+
+            // --- Bottom: Values and continued fractions ---
+            int bottomY = h - 130;
+            g2.setColor(colorWithAlpha(20, 20, 40, 220));
+            g2.fillRoundRect(15, bottomY, w - 30, 125, 8, 8);
+
+            g2.setFont(new Font("Monospaced", Font.BOLD, 12));
+            int col1 = 25, col2 = w / 2 + 10;
+
+            // Left column: current values
+            g2.setColor(ACCENT);
+            g2.drawString("Current Values:", col1, bottomY + 18);
+            g2.setFont(new Font("Monospaced", Font.PLAIN, 11));
+            g2.setColor(new Color(255, 200, 100));
+            g2.drawString(String.format("c        = %.10f", cValue), col1, bottomY + 38);
+            g2.drawString(String.format("F(c)     = %.15f", F), col1, bottomY + 55);
+
+            Color rColor = Math.abs(r) < 0.001 ? new Color(100, 255, 100) : new Color(255, 150, 100);
+            g2.setColor(rColor);
+            g2.drawString(String.format("r = 1-F  = %.15f", r), col1, bottomY + 72);
+            g2.setColor(TEXT_COLOR);
+            g2.drawString(String.format("1/phi-1/pi = %.10f", A_MINUS_P), col1, bottomY + 92);
+            g2.drawString(String.format("1/phi+c    = %.10f", INV_PHI + cValue), col1, bottomY + 109);
+
+            // Right column: continued fractions and equivalent form
+            g2.setFont(new Font("Monospaced", Font.BOLD, 12));
+            g2.setColor(ACCENT);
+            g2.drawString("Continued Fractions:", col2, bottomY + 18);
+            g2.setFont(new Font("Monospaced", Font.PLAIN, 11));
+            g2.setColor(new Color(255, 100, 100));
+            g2.drawString("e       = [2,1,2,1,1,4,1,1,6,1,1,8,...]", col2, bottomY + 38);
+            g2.setColor(new Color(100, 200, 255));
+            g2.drawString("c_exact = [2,1,2,1,1,4,2,2,1,47,...]", col2, bottomY + 55);
+            g2.setColor(new Color(150, 150, 200));
+            g2.drawString("              ^^^^^^^^^^^^^^", col2, bottomY + 70);
+            g2.drawString("              6 terms match", col2, bottomY + 83);
+
+            g2.setColor(new Color(200, 200, 220));
+            g2.drawString("Equivalent: e = (pi+1)/(pi-phi)", col2, bottomY + 103);
+            g2.drawString(String.format("c_exact = %.10f  e = %.10f", C_EXACT, Math.E), col2, bottomY + 118);
+        }
+
+        /**
+         * Draws the main F(c) plot showing the full range.
+         */
+        private void drawMainPlot(Graphics2D g2, int w, int h) {
+            int margin = 50;
+            int plotW = w - 2 * margin;
+            int plotH = h - 190;
+            int ox = margin, oy = 45;
+
+            double cMin = -1, cMax = 6;
+            double fMin = -0.5, fMax = 2.5;
+
+            // Grid
+            g2.setColor(withAlpha(TEXT_COLOR, 15));
+            for (int i = (int) cMin; i <= (int) cMax; i++) {
+                int px = ox + (int)((i - cMin) / (cMax - cMin) * plotW);
+                g2.drawLine(px, oy, px, oy + plotH);
+            }
+            for (int i = (int) fMin; i <= (int) fMax; i++) {
+                int py = oy + (int)((fMax - i) / (fMax - fMin) * plotH);
+                g2.drawLine(ox, py, ox + plotW, py);
+            }
+
+            // Axes
+            g2.setColor(withAlpha(TEXT_COLOR, 60));
+            g2.setStroke(new BasicStroke(1.5f));
+            int zeroX = ox + (int)((0 - cMin) / (cMax - cMin) * plotW);
+            int zeroY = oy + (int)((fMax - 0) / (fMax - fMin) * plotH);
+            g2.drawLine(ox, zeroY, ox + plotW, zeroY);
+            g2.drawLine(zeroX, oy, zeroX, oy + plotH);
+
+            // Axis labels
+            g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
+            g2.setColor(withAlpha(TEXT_COLOR, 120));
+            for (int i = (int) cMin; i <= (int) cMax; i++) {
+                int px = ox + (int)((i - cMin) / (cMax - cMin) * plotW);
+                g2.drawString(String.valueOf(i), px - 3, zeroY + 14);
+            }
+            for (int i = (int) fMin; i <= (int) fMax; i++) {
+                int py = oy + (int)((fMax - i) / (fMax - fMin) * plotH);
+                g2.drawString(String.valueOf(i), zeroX - 18, py + 4);
+            }
+
+            // F=1 line (highlighted)
+            int oneY = oy + (int)((fMax - 1.0) / (fMax - fMin) * plotH);
+            g2.setColor(withAlpha(new Color(255, 255, 100), 60));
+            g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{6, 3}, 0));
+            g2.drawLine(ox, oneY, ox + plotW, oneY);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 11));
+            g2.setColor(new Color(255, 255, 100));
+            g2.drawString("F = 1", ox + plotW + 5, oneY + 4);
+
+            // Plot F(c) curve
+            g2.setStroke(new BasicStroke(3f));
+            GeneralPath path = new GeneralPath();
+            boolean started = false;
+            for (int px = 0; px <= plotW; px++) {
+                double c = cMin + (cMax - cMin) * px / plotW;
+                double f = computeF(c);
+                if (f < fMin - 1 || f > fMax + 1) { started = false; continue; }
+                float fx = ox + px;
+                float fy = (float)(oy + (fMax - f) / (fMax - fMin) * plotH);
+                if (!started) { path.moveTo(fx, fy); started = true; }
+                else path.lineTo(fx, fy);
+            }
+            Shape oldClip = g2.getClip();
+            g2.setClip(ox, oy, plotW, plotH);
+            // Glow
+            float hue = (float)((animFrame * 0.005) % 1.0);
+            Color curveColor = Color.getHSBColor(hue, 0.7f, 1.0f);
+            g2.setColor(withAlpha(curveColor, 30));
+            g2.setStroke(new BasicStroke(8f));
+            g2.draw(path);
+            g2.setColor(curveColor);
+            g2.setStroke(new BasicStroke(2.5f));
+            g2.draw(path);
+            g2.setClip(oldClip);
+
+            // Marker at c = e
+            double fAtE = computeF(Math.E);
+            int eX = ox + (int)((Math.E - cMin) / (cMax - cMin) * plotW);
+            int eY = oy + (int)((fMax - fAtE) / (fMax - fMin) * plotH);
+            drawGlowCircle(g2, eX, eY, 8, new Color(255, 80, 80));
+            g2.setFont(new Font("SansSerif", Font.BOLD, 11));
+            g2.setColor(new Color(255, 80, 80));
+            g2.drawString("c = e", eX + 12, eY - 8);
+            g2.drawString(String.format("F = %.6f", fAtE), eX + 12, eY + 8);
+
+            // Marker at c_exact
+            int exX = ox + (int)((C_EXACT - cMin) / (cMax - cMin) * plotW);
+            drawGlowCircle(g2, exX, oneY, 8, new Color(100, 255, 100));
+            g2.setColor(new Color(100, 255, 100));
+            g2.drawString("c_exact", exX + 12, oneY - 12);
+            g2.drawString("F = 1.000000", exX + 12, oneY + 4);
+
+            // Current c marker
+            double fAtC = computeF(cValue);
+            int cX = ox + (int)((cValue - cMin) / (cMax - cMin) * plotW);
+            int cY = oy + (int)((fMax - fAtC) / (fMax - fMin) * plotH);
+            if (cX >= ox && cX <= ox + plotW && cY >= oy && cY <= oy + plotH) {
+                g2.setColor(withAlpha(new Color(255, 200, 50), 100));
+                g2.setStroke(new BasicStroke(1, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{4, 3}, 0));
+                g2.drawLine(cX, oy, cX, oy + plotH);
+                g2.drawLine(ox, cY, ox + plotW, cY);
+                drawGlowCircle(g2, cX, cY, 10, new Color(255, 200, 50));
+                g2.setFont(new Font("SansSerif", Font.BOLD, 11));
+                g2.setColor(new Color(255, 200, 50));
+                g2.drawString(String.format("c = %.4f", cValue), cX + 14, cY - 14);
+                g2.drawString(String.format("F = %.10f", fAtC), cX + 14, cY + 2);
+            }
+            g2.setStroke(new BasicStroke(1));
+
+            // Axis titles
+            g2.setFont(new Font("SansSerif", Font.BOLD, 13));
+            g2.setColor(TEXT_COLOR);
+            g2.drawString("c", ox + plotW / 2, oy + plotH + 30);
+            g2.drawString("F(c)", ox - 40, oy + plotH / 2);
+        }
+
+        /**
+         * Draws the zoomed plot near F=1, showing the tiny gap between e and c_exact.
+         */
+        private void drawZoomPlot(Graphics2D g2, int w, int h) {
+            int margin = 60;
+            int plotW = w - 2 * margin;
+            int plotH = h - 190;
+            int ox = margin, oy = 45;
+
+            // Zoom to region around e and c_exact
+            double cMin = 2.7180, cMax = 2.7190;
+            double fMin = 0.99990, fMax = 1.00005;
+
+            // Background
+            g2.setColor(colorWithAlpha(15, 15, 35, 255));
+            g2.fillRect(ox, oy, plotW, plotH);
+
+            // Grid
+            g2.setColor(withAlpha(TEXT_COLOR, 20));
+            g2.setFont(new Font("SansSerif", Font.PLAIN, 9));
+            for (int i = 0; i <= 10; i++) {
+                double c = cMin + (cMax - cMin) * i / 10;
+                int px = ox + (int)((c - cMin) / (cMax - cMin) * plotW);
+                g2.drawLine(px, oy, px, oy + plotH);
+                g2.setColor(withAlpha(TEXT_COLOR, 80));
+                g2.drawString(String.format("%.4f", c), px - 15, oy + plotH + 14);
+                g2.setColor(withAlpha(TEXT_COLOR, 20));
+            }
+            for (int i = 0; i <= 8; i++) {
+                double f = fMin + (fMax - fMin) * i / 8;
+                int py = oy + (int)((fMax - f) / (fMax - fMin) * plotH);
+                g2.drawLine(ox, py, ox + plotW, py);
+                g2.setColor(withAlpha(TEXT_COLOR, 80));
+                g2.drawString(String.format("%.5f", f), ox - 55, py + 4);
+                g2.setColor(withAlpha(TEXT_COLOR, 20));
+            }
+
+            // F=1 line
+            int oneY = oy + (int)((fMax - 1.0) / (fMax - fMin) * plotH);
+            g2.setColor(new Color(255, 255, 100, 100));
+            g2.setStroke(new BasicStroke(2));
+            g2.drawLine(ox, oneY, ox + plotW, oneY);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+            g2.setColor(new Color(255, 255, 100));
+            g2.drawString("F = 1", ox + plotW + 5, oneY + 4);
+
+            // Plot F(c) in zoom
+            g2.setStroke(new BasicStroke(3f));
+            GeneralPath path = new GeneralPath();
+            for (int px = 0; px <= plotW; px++) {
+                double c = cMin + (cMax - cMin) * px / plotW;
+                double f = computeF(c);
+                float fx = ox + px;
+                float fy = (float)(oy + (fMax - f) / (fMax - fMin) * plotH);
+                if (px == 0) path.moveTo(fx, fy);
+                else path.lineTo(fx, fy);
+            }
+            float hue = (float)((animFrame * 0.005) % 1.0);
+            Color curveColor = Color.getHSBColor(hue, 0.7f, 1.0f);
+            g2.setColor(withAlpha(curveColor, 30));
+            g2.setStroke(new BasicStroke(8f));
+            g2.draw(path);
+            g2.setColor(curveColor);
+            g2.setStroke(new BasicStroke(3f));
+            g2.draw(path);
+
+            // c=e marker
+            double fAtE = computeF(Math.E);
+            int eX = ox + (int)((Math.E - cMin) / (cMax - cMin) * plotW);
+            int eY = oy + (int)((fMax - fAtE) / (fMax - fMin) * plotH);
+            drawGlowCircle(g2, eX, eY, 10, new Color(255, 80, 80));
+            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+            g2.setColor(new Color(255, 80, 80));
+            g2.drawString("c = e = 2.71828...", eX + 14, eY - 10);
+            g2.drawString(String.format("F = %.10f", fAtE), eX + 14, eY + 8);
+
+            // c_exact marker (where F=1)
+            int exX = ox + (int)((C_EXACT - cMin) / (cMax - cMin) * plotW);
+            drawGlowCircle(g2, exX, oneY, 10, new Color(100, 255, 100));
+            g2.setColor(new Color(100, 255, 100));
+            g2.drawString("c_exact = 2.71836...", exX + 14, oneY - 10);
+            g2.drawString("F = 1.000000000", exX + 14, oneY + 8);
+
+            // Gap arrow between the two points
+            g2.setColor(new Color(255, 200, 100, 200));
+            g2.setStroke(new BasicStroke(2));
+            int arrowY = Math.min(eY, oneY) + Math.abs(eY - oneY) / 2;
+            g2.drawLine(eX, arrowY, exX, arrowY);
+            g2.drawString(String.format("gap = %.6f", C_EXACT - Math.E), (eX + exX) / 2 - 40, arrowY - 8);
+            g2.setStroke(new BasicStroke(1));
+
+            // Zoom label
+            g2.setFont(new Font("SansSerif", Font.BOLD, 14));
+            g2.setColor(new Color(255, 150, 50));
+            g2.drawString("ZOOM VIEW", ox + plotW - 100, oy + 20);
+
+            // Axis titles
+            g2.setFont(new Font("SansSerif", Font.BOLD, 13));
+            g2.setColor(TEXT_COLOR);
+            g2.drawString("c", ox + plotW / 2, oy + plotH + 30);
+            g2.drawString("F(c)", ox - 55, oy - 5);
+        }
+    }
+
+    // =====================================================================
     // TAB: Overview
     // =====================================================================
 
@@ -4888,20 +5319,21 @@ public class MathExplorer extends JFrame {
             "Fibonacci", "Matrix", "Eigenvalues", "Matrix Exp",
             "Taylor", "e^x Props", "Euler", "DiffEq/Laplace",
             "Spiral", "Dimensions", "Circle/Pi", "Norms",
-            "Photon", "Spacetime", "Redshift"
+            "Photon", "Spacetime", "Redshift", "Uwe Formula"
         };
         private static final double[][] NODE_POS = {
             {0.12, 0.15}, {0.32, 0.15}, {0.52, 0.15}, {0.72, 0.15},
             {0.12, 0.40}, {0.32, 0.40}, {0.52, 0.40}, {0.72, 0.40},
             {0.12, 0.65}, {0.32, 0.65}, {0.52, 0.65}, {0.72, 0.65},
-            {0.92, 0.15}, {0.92, 0.40}, {0.92, 0.65}
+            {0.92, 0.15}, {0.92, 0.40}, {0.92, 0.65}, {0.50, 0.88}
         };
-        private static final int[] NODE_TABS = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+        private static final int[] NODE_TABS = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
         private static final int[][] EDGES = {
             {0, 1}, {1, 2}, {1, 3}, {3, 4}, {4, 5}, {5, 6},
             {6, 7}, {0, 8}, {2, 5}, {0, 9}, {6, 10}, {4, 3},
             {5, 7}, {10, 11}, {7, 12}, {2, 0}, {8, 10}, {6, 12},
-            {12, 14}, {13, 14}, {1, 13}, {5, 13}, {12, 13}
+            {12, 14}, {13, 14}, {1, 13}, {5, 13}, {12, 13},
+            {15, 5}, {15, 10}, {15, 2}, {15, 4}
         };
         private static final String[] EDGE_LABELS = {
             "generates", "decomposition", "e^A series", "Taylor approx",
@@ -4911,7 +5343,8 @@ public class MathExplorer extends JFrame {
             "Lp unit shapes", "E=hf photon", "phi ratio",
             "Fib squares", "wave equation",
             "Doppler shift", "wavelength change", "Lorentz matrix",
-            "cosh/sinh from e^x", "E=hf energy"
+            "cosh/sinh from e^x", "E=hf energy",
+            "uses e", "uses 1/pi", "uses phi", "e approximation"
         };
 
         /**
