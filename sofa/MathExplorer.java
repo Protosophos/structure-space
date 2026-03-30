@@ -2582,6 +2582,10 @@ public class MathExplorer extends JFrame {
          * Draws Fibonacci squares and quarter-circle arcs forming the golden spiral.
          * Uses screen coordinates (Y down) throughout to avoid mismatch.
          */
+        /**
+         * Draws Fibonacci squares and a smooth continuous golden spiral.
+         * Uses double precision throughout to avoid gaps between arc segments.
+         */
         private void drawFibonacciSpiral(Graphics2D g2, int cx, int cy, int maxSq) {
             if (maxSq <= 0) return;
 
@@ -2590,86 +2594,146 @@ public class MathExplorer extends JFrame {
             if (maxSq > 0) fibs[1] = 1;
             for (int i = 2; i < maxSq; i++) fibs[i] = fibs[i - 1] + fibs[i - 2];
 
-            // Auto-scale to fit in available area
             long maxFib = fibs[maxSq - 1];
             double scale = Math.min(350.0, Math.min(cx - 30, cy - 50)) / maxFib;
 
-            // Track the top-left corner of each square in screen coords
-            // Start first square at center
-            double sqX = cx - fibs[0] * scale / 2;
-            double sqY = cy - fibs[0] * scale / 2;
+            // Compute all square positions first using doubles for precision
+            double[] sqXs = new double[maxSq];
+            double[] sqYs = new double[maxSq];
+            double[] sides = new double[maxSq];
 
-            // Direction cycle: 0=right, 1=down, 2=left, 3=up
-            // This determines where the NEXT square is placed relative to current
+            sqXs[0] = cx - fibs[0] * scale / 2.0;
+            sqYs[0] = cy - fibs[0] * scale / 2.0;
+            sides[0] = fibs[0] * scale;
+
             int dir = 0;
-
             for (int i = 0; i < maxSq; i++) {
-                int side = (int)(fibs[i] * scale);
-                int px = (int) sqX;
-                int py = (int) sqY;
-
-                float hue = i / (float) Math.max(maxSq, 1);
-                Color sqColor = Color.getHSBColor(hue, 0.6f, 0.9f);
-
-                // Fill square
-                g2.setColor(withAlpha(sqColor, 40));
-                g2.fillRect(px, py, side, side);
-
-                // Border
-                g2.setColor(sqColor);
-                g2.setStroke(new BasicStroke(2));
-                g2.drawRect(px, py, side, side);
-
-                // Label
-                if (side > 15) {
-                    g2.setFont(new Font("SansSerif", Font.BOLD, Math.max(8, Math.min(14, side / 4))));
-                    g2.setColor(withAlpha(sqColor, 200));
-                    g2.drawString(String.valueOf(fibs[i]), px + 4, py + side - 4);
-                }
-
-                // Quarter-circle arc inside this square
-                // The arc center is at the corner where the spiral continues
-                g2.setColor(withAlpha(new Color(255, 255, 255), 200));
-                g2.setStroke(new BasicStroke(2.5f));
-                int diameter = side * 2;
-                switch (dir) {
-                    case 0: // next goes right -> arc from bottom-left corner
-                        g2.drawArc(px - side, py, diameter, diameter, 0, 90);
-                        break;
-                    case 1: // next goes down -> arc from bottom-right corner
-                        g2.drawArc(px - side, py - side, diameter, diameter, 270, 90);
-                        break;
-                    case 2: // next goes left -> arc from top-right corner
-                        g2.drawArc(px, py - side, diameter, diameter, 180, 90);
-                        break;
-                    case 3: // next goes up -> arc from top-left corner
-                        g2.drawArc(px, py, diameter, diameter, 90, 90);
-                        break;
+                sides[i] = fibs[i] * scale;
+                if (i > 0) {
+                    // Already computed in previous iteration
                 }
 
                 // Compute next square position
                 if (i + 1 < maxSq) {
-                    int nextSide = (int)(fibs[i + 1] * scale);
+                    double nextSide = fibs[i + 1] * scale;
                     switch (dir) {
-                        case 0: // place next to the right
-                            sqX = px + side;
-                            sqY = py + side - nextSide;
+                        case 0:
+                            sqXs[i + 1] = sqXs[i] + sides[i];
+                            sqYs[i + 1] = sqYs[i] + sides[i] - nextSide;
                             break;
-                        case 1: // place next below
-                            sqX = px + side - nextSide;
-                            sqY = py + side;
+                        case 1:
+                            sqXs[i + 1] = sqXs[i] + sides[i] - nextSide;
+                            sqYs[i + 1] = sqYs[i] + sides[i];
                             break;
-                        case 2: // place next to the left
-                            sqX = px - nextSide;
-                            sqY = py;
+                        case 2:
+                            sqXs[i + 1] = sqXs[i] - nextSide;
+                            sqYs[i + 1] = sqYs[i];
                             break;
-                        case 3: // place next above
-                            sqX = px;
-                            sqY = py - nextSide;
+                        case 3:
+                            sqXs[i + 1] = sqXs[i];
+                            sqYs[i + 1] = sqYs[i] - nextSide;
                             break;
                     }
                 }
                 dir = (dir + 1) % 4;
+            }
+
+            // Draw squares
+            dir = 0;
+            for (int i = 0; i < maxSq; i++) {
+                double s = sides[i];
+                double px = sqXs[i];
+                double py = sqYs[i];
+
+                float hue = i / (float) Math.max(maxSq, 1);
+                Color sqColor = Color.getHSBColor(hue, 0.6f, 0.9f);
+
+                g2.setColor(withAlpha(sqColor, 40));
+                g2.fillRect((int) px, (int) py, (int) s, (int) s);
+
+                g2.setColor(sqColor);
+                g2.setStroke(new BasicStroke(2));
+                g2.drawRect((int) px, (int) py, (int) s, (int) s);
+
+                if (s > 15) {
+                    g2.setFont(new Font("SansSerif", Font.BOLD, Math.max(8, Math.min(14, (int)(s / 4)))));
+                    g2.setColor(withAlpha(sqColor, 200));
+                    g2.drawString(String.valueOf(fibs[i]), (int) px + 4, (int)(py + s - 4));
+                }
+                dir = (dir + 1) % 4;
+            }
+
+            // Draw a true golden logarithmic spiral: r(theta) = a * phi^(2*theta/pi)
+            // Compute spiral center from inner corners of smallest squares
+            double spiralCX, spiralCY;
+            if (maxSq >= 4) {
+                // Average the inner corners of the last squares (they converge to center)
+                double avgX = 0, avgY = 0;
+                int count = Math.min(maxSq, 6);
+                dir = 0;
+                for (int i = 0; i < maxSq; i++) {
+                    if (i >= maxSq - count) {
+                        double ix, iy;
+                        switch (dir) {
+                            case 0: ix = sqXs[i]; iy = sqYs[i] + sides[i]; break;
+                            case 1: ix = sqXs[i] + sides[i]; iy = sqYs[i] + sides[i]; break;
+                            case 2: ix = sqXs[i] + sides[i]; iy = sqYs[i]; break;
+                            default: ix = sqXs[i]; iy = sqYs[i]; break;
+                        }
+                        avgX += ix;
+                        avgY += iy;
+                    }
+                    dir = (dir + 1) % 4;
+                }
+                spiralCX = avgX / count;
+                spiralCY = avgY / count;
+            } else {
+                spiralCX = sqXs[0] + sides[0] / 2;
+                spiralCY = sqYs[0] + sides[0] / 2;
+            }
+
+            // Compute max radius needed
+            double minX = sqXs[0], maxX2 = sqXs[0] + sides[0];
+            double minY = sqYs[0], maxY2 = sqYs[0] + sides[0];
+            for (int i = 1; i < maxSq; i++) {
+                minX = Math.min(minX, sqXs[i]);
+                minY = Math.min(minY, sqYs[i]);
+                maxX2 = Math.max(maxX2, sqXs[i] + sides[i]);
+                maxY2 = Math.max(maxY2, sqYs[i] + sides[i]);
+            }
+            double maxR = Math.max(maxX2 - minX, maxY2 - minY) * 0.6;
+
+            // Golden spiral: r = a * phi^(2*theta/pi)
+            double growthRate = 2.0 * Math.log(PHI) / Math.PI;
+            double startR = 1.0;
+            double maxTheta = Math.log(maxR / startR) / growthRate;
+
+            // Draw rainbow spiral
+            int totalPoints = 1000;
+            double prevX = 0, prevY = 0;
+            for (int j = 0; j <= totalPoints; j++) {
+                double theta = maxTheta * j / totalPoints;
+                double r2 = startR * Math.exp(growthRate * theta);
+                if (r2 > maxR) break;
+
+                double angle = -theta + Math.PI;
+                double x = spiralCX + r2 * Math.cos(angle);
+                double y = spiralCY + r2 * Math.sin(angle);
+
+                if (j > 0) {
+                    float hue2 = (float) j / totalPoints;
+                    Color c = Color.getHSBColor(hue2, 0.8f, 1.0f);
+                    // Glow
+                    g2.setColor(withAlpha(c, 25));
+                    g2.setStroke(new BasicStroke(7f));
+                    g2.drawLine((int) prevX, (int) prevY, (int) x, (int) y);
+                    // Main line
+                    g2.setColor(c);
+                    g2.setStroke(new BasicStroke(2.5f));
+                    g2.drawLine((int) prevX, (int) prevY, (int) x, (int) y);
+                }
+                prevX = x;
+                prevY = y;
             }
             g2.setStroke(new BasicStroke(1));
         }
