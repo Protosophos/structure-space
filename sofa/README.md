@@ -33,3 +33,9 @@ javac FibonacciTree.java && java FibonacciTree
 ```bash
 javac TaylorExponential.java && java TaylorExponential
 ```
+
+## Math Explorer
+
+```bash
+javac MathExplorer.java && java MathExplorer
+```
