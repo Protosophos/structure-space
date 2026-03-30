@@ -59,7 +59,8 @@ public class MathExplorer extends JFrame {
         tabbedPane.addTab("6. Dimensions", new DimensionsPanel());
         tabbedPane.addTab("7. Circle & Pi", new CirclePiPanel());
         tabbedPane.addTab("8. Norms", new NormsPanel());
-        tabbedPane.addTab("9. Overview", new OverviewPanel(tabbedPane));
+        tabbedPane.addTab("9. Photon", new PhotonPanel());
+        tabbedPane.addTab("10. Overview", new OverviewPanel(tabbedPane));
 
         add(tabbedPane);
     }
@@ -2679,7 +2680,469 @@ public class MathExplorer extends JFrame {
     }
 
     // =====================================================================
-    // TAB 9: Overview
+    // TAB 9: Photon Emission
+    // =====================================================================
+
+    /**
+     * Panel visualizing photon emission from atomic energy level transitions.
+     * Shows an atom with energy levels, electron transitions, electromagnetic
+     * wave emission, and the relationship E = h * f.
+     */
+    static class PhotonPanel extends JPanel {
+        private int animFrame = 0;
+        private int selectedLevel = 3;
+        private int targetLevel = 1;
+        private boolean emitting = false;
+        private int emitFrame = 0;
+        private double photonX = 0;
+        private javax.swing.Timer animTimer;
+        private JSlider fromSlider, toSlider;
+        private JLabel infoLabel;
+        private boolean adjusting = false;
+
+        /** Energy levels in eV (simplified hydrogen-like) */
+        private static final double[] ENERGY_LEVELS = {
+            -13.6, -3.4, -1.51, -0.85, -0.54, -0.38
+        };
+
+        /**
+         * Constructs the Photon emission visualization panel.
+         */
+        public PhotonPanel() {
+            setLayout(new BorderLayout());
+            setBackground(PANEL_BG);
+
+            // --- Right sidebar ---
+            JPanel sidebar = new JPanel();
+            sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
+            sidebar.setBackground(new Color(30, 30, 55));
+            sidebar.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+            sidebar.setPreferredSize(new Dimension(280, 0));
+
+            JLabel title = new JLabel("Photon Emission");
+            title.setForeground(ACCENT);
+            title.setFont(new Font("SansSerif", Font.BOLD, 18));
+            title.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(title);
+            sidebar.add(Box.createVerticalStrut(10));
+
+            JTextArea explanation = new JTextArea(
+                "When an electron drops from a\n" +
+                "higher to a lower energy level,\n" +
+                "it emits a photon.\n\n" +
+                "The photon's energy equals the\n" +
+                "difference between the levels:\n\n" +
+                "E = E_high - E_low = h * f\n\n" +
+                "Higher energy = shorter wavelength\n" +
+                "= bluer light.\n" +
+                "Lower energy = longer wavelength\n" +
+                "= redder light."
+            );
+            explanation.setEditable(false);
+            explanation.setBackground(new Color(35, 35, 60));
+            explanation.setForeground(new Color(200, 200, 220));
+            explanation.setFont(new Font("SansSerif", Font.PLAIN, 12));
+            explanation.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            explanation.setMaximumSize(new Dimension(250, 220));
+            explanation.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(explanation);
+            sidebar.add(Box.createVerticalStrut(15));
+
+            // From level
+            JLabel fromLabel = new JLabel("From level (n):");
+            fromLabel.setForeground(Color.WHITE);
+            fromLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
+            fromLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(fromLabel);
+            sidebar.add(Box.createVerticalStrut(3));
+
+            fromSlider = new JSlider(2, 6, 3);
+            fromSlider.setBackground(new Color(30, 30, 55));
+            fromSlider.setForeground(Color.WHITE);
+            fromSlider.setMajorTickSpacing(1);
+            fromSlider.setPaintTicks(true);
+            fromSlider.setPaintLabels(true);
+            fromSlider.setSnapToTicks(true);
+            fromSlider.setMaximumSize(new Dimension(250, 45));
+            fromSlider.setAlignmentX(Component.LEFT_ALIGNMENT);
+            fromSlider.addChangeListener(e -> {
+                int val = fromSlider.getValue();
+                if (val <= targetLevel) val = targetLevel + 1;
+                if (val > 6) val = 6;
+                selectedLevel = val;
+                updateInfo();
+                repaint();
+            });
+            sidebar.add(fromSlider);
+            sidebar.add(Box.createVerticalStrut(10));
+
+            // To level
+            JLabel toLabel = new JLabel("To level (n):");
+            toLabel.setForeground(Color.WHITE);
+            toLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
+            toLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(toLabel);
+            sidebar.add(Box.createVerticalStrut(3));
+
+            toSlider = new JSlider(1, 5, 1);
+            toSlider.setBackground(new Color(30, 30, 55));
+            toSlider.setForeground(Color.WHITE);
+            toSlider.setMajorTickSpacing(1);
+            toSlider.setPaintTicks(true);
+            toSlider.setPaintLabels(true);
+            toSlider.setSnapToTicks(true);
+            toSlider.setMaximumSize(new Dimension(250, 45));
+            toSlider.setAlignmentX(Component.LEFT_ALIGNMENT);
+            toSlider.addChangeListener(e -> {
+                int val = toSlider.getValue();
+                if (val >= selectedLevel) val = selectedLevel - 1;
+                if (val < 1) val = 1;
+                targetLevel = val;
+                updateInfo();
+                repaint();
+            });
+            sidebar.add(toSlider);
+            sidebar.add(Box.createVerticalStrut(15));
+
+            // Emit button
+            JButton emitBtn = createDarkButton("Emit Photon!");
+            emitBtn.setBackground(new Color(220, 50, 50));
+            emitBtn.setMaximumSize(new Dimension(250, 35));
+            emitBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+            emitBtn.addActionListener(e -> {
+                emitting = true;
+                emitFrame = 0;
+                photonX = 0;
+            });
+            sidebar.add(emitBtn);
+            sidebar.add(Box.createVerticalStrut(15));
+
+            // Info label
+            infoLabel = new JLabel();
+            infoLabel.setForeground(new Color(150, 255, 150));
+            infoLabel.setFont(new Font("Monospaced", Font.PLAIN, 11));
+            infoLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(infoLabel);
+
+            sidebar.add(Box.createVerticalGlue());
+            add(sidebar, BorderLayout.EAST);
+
+            updateInfo();
+
+            animTimer = new javax.swing.Timer(16, e -> {
+                animFrame++;
+                if (emitting) {
+                    emitFrame++;
+                    photonX += 4;
+                    if (emitFrame > 300) {
+                        emitting = false;
+                    }
+                }
+                repaint();
+            });
+            animTimer.start();
+        }
+
+        /**
+         * Updates the info label with current energy, wavelength, and frequency.
+         */
+        private void updateInfo() {
+            double eHigh = ENERGY_LEVELS[selectedLevel - 1];
+            double eLow = ENERGY_LEVELS[targetLevel - 1];
+            double deltaE = eHigh - eLow;
+            double deltaEJoules = deltaE * 1.602e-19;
+            double h = 6.626e-34;
+            double c = 3e8;
+            double freq = Math.abs(deltaEJoules) / h;
+            double wavelength = c / freq * 1e9;
+
+            infoLabel.setText(String.format(
+                "<html>" +
+                "E_high = %.2f eV (n=%d)<br>" +
+                "E_low = %.2f eV (n=%d)<br>" +
+                "Delta E = %.2f eV<br><br>" +
+                "Wavelength = %.1f nm<br>" +
+                "Frequency = %.2e Hz<br><br>" +
+                "E = h * f" +
+                "</html>",
+                eHigh, selectedLevel, eLow, targetLevel, deltaE, wavelength, freq
+            ));
+        }
+
+        /**
+         * Converts a photon wavelength in nm to a visible color.
+         *
+         * @param wavelength the wavelength in nanometers
+         * @return the approximate visible color
+         */
+        private Color wavelengthToColor(double wavelength) {
+            double r = 0, g = 0, b = 0;
+            if (wavelength >= 380 && wavelength < 440) {
+                r = -(wavelength - 440) / (440 - 380);
+                b = 1.0;
+            } else if (wavelength >= 440 && wavelength < 490) {
+                g = (wavelength - 440) / (490 - 440);
+                b = 1.0;
+            } else if (wavelength >= 490 && wavelength < 510) {
+                g = 1.0;
+                b = -(wavelength - 510) / (510 - 490);
+            } else if (wavelength >= 510 && wavelength < 580) {
+                r = (wavelength - 510) / (580 - 510);
+                g = 1.0;
+            } else if (wavelength >= 580 && wavelength < 645) {
+                r = 1.0;
+                g = -(wavelength - 645) / (645 - 580);
+            } else if (wavelength >= 645 && wavelength <= 780) {
+                r = 1.0;
+            } else if (wavelength < 380) {
+                r = 0.6; b = 1.0;
+            } else {
+                r = 0.8;
+            }
+            return new Color(
+                Math.max(0, Math.min(255, (int)(r * 255))),
+                Math.max(0, Math.min(255, (int)(g * 255))),
+                Math.max(0, Math.min(255, (int)(b * 255)))
+            );
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g;
+            setupRendering(g2);
+
+            int w = getWidth() - 280;
+            int h = getHeight();
+
+            g2.setColor(PANEL_BG);
+            g2.fillRect(0, 0, w, h);
+
+            // Title
+            g2.setFont(new Font("SansSerif", Font.BOLD, 20));
+            drawGlowString(g2, "Photon Emission from Atomic Energy Levels", 20, 30, ACCENT);
+
+            // --- Left: Atom with energy levels ---
+            int atomX = 180;
+            int atomY = h / 2 - 30;
+            int maxRadius = 160;
+
+            // Draw nucleus
+            drawGlowCircle(g2, atomX, atomY, 12, new Color(255, 150, 50));
+            g2.setFont(new Font("SansSerif", Font.BOLD, 10));
+            g2.setColor(Color.WHITE);
+            g2.drawString("+", atomX - 4, atomY + 4);
+
+            // Draw energy levels as orbits
+            for (int n = 1; n <= 6; n++) {
+                int radius = 25 + n * 22;
+                float hue = (n - 1) / 6.0f;
+                Color levelColor = Color.getHSBColor(hue, 0.6f, 0.8f);
+
+                boolean isFrom = (n == selectedLevel);
+                boolean isTo = (n == targetLevel);
+
+                if (isFrom || isTo) {
+                    g2.setColor(withAlpha(levelColor, 80));
+                    g2.setStroke(new BasicStroke(3));
+                } else {
+                    g2.setColor(withAlpha(levelColor, 40));
+                    g2.setStroke(new BasicStroke(1));
+                }
+                g2.drawOval(atomX - radius, atomY - radius, radius * 2, radius * 2);
+
+                // Level label - placed at top of each orbit to avoid overlap
+                g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
+                g2.setColor(withAlpha(levelColor, 200));
+                g2.drawString(String.format("n=%d", n),
+                    atomX - 8, atomY - radius - 4);
+
+                // Draw electron on selected level
+                if (isFrom && !emitting) {
+                    double eAngle = animFrame * 0.03;
+                    int ex = atomX + (int)(radius * Math.cos(eAngle));
+                    int ey = atomY + (int)(radius * Math.sin(eAngle));
+                    drawGlowCircle(g2, ex, ey, 6, new Color(100, 150, 255));
+                }
+
+                // Draw electron on target level after emission
+                if (isTo && emitting && emitFrame > 20) {
+                    double eAngle = animFrame * 0.04;
+                    int ex = atomX + (int)(radius * Math.cos(eAngle));
+                    int ey = atomY + (int)(radius * Math.sin(eAngle));
+                    drawGlowCircle(g2, ex, ey, 6, new Color(100, 150, 255));
+                }
+            }
+            g2.setStroke(new BasicStroke(1));
+
+            // Transition arrow
+            if (!emitting) {
+                int fromR = 25 + selectedLevel * 22;
+                int toR = 25 + targetLevel * 22;
+                g2.setColor(new Color(255, 255, 100, 150));
+                g2.setStroke(new BasicStroke(2, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{5, 3}, 0));
+                g2.drawLine(atomX + fromR, atomY, atomX + toR, atomY);
+                // Arrowhead
+                g2.fillPolygon(
+                    new int[]{atomX + toR + 2, atomX + toR + 10, atomX + toR + 10},
+                    new int[]{atomY, atomY - 5, atomY + 5}, 3);
+                g2.setStroke(new BasicStroke(1));
+            }
+
+            // --- Right: Electromagnetic wave / Photon ---
+            double eHigh = ENERGY_LEVELS[selectedLevel - 1];
+            double eLow = ENERGY_LEVELS[targetLevel - 1];
+            double deltaE = eHigh - eLow;
+            double deltaEJ = deltaE * 1.602e-19;
+            double freq = Math.abs(deltaEJ) / 6.626e-34;
+            double wavelengthNm = 3e8 / freq * 1e9;
+            Color photonColor = wavelengthToColor(wavelengthNm);
+
+            int waveStartX = atomX + maxRadius + 60;
+            int waveY = atomY;
+            int waveLen = w - waveStartX - 30;
+
+            if (emitting && emitFrame > 10) {
+                // Wave frequency scales with energy
+                double waveFreq = 0.05 + deltaE * 0.02;
+                double amplitude = 50;
+
+                // Photon wave packet
+                double packetCenter = photonX;
+                double packetWidth = 100;
+
+                // E-field (vertical)
+                g2.setStroke(new BasicStroke(2.5f));
+                GeneralPath ePath = new GeneralPath();
+                boolean started = false;
+                for (int px = 0; px < waveLen; px++) {
+                    double dist = px - packetCenter;
+                    double envelope = Math.exp(-(dist * dist) / (packetWidth * packetWidth));
+                    double yOff = amplitude * envelope * Math.sin(px * waveFreq);
+                    float drawX = waveStartX + px;
+                    float drawY = (float)(waveY - yOff);
+                    if (!started) { ePath.moveTo(drawX, drawY); started = true; }
+                    else ePath.lineTo(drawX, drawY);
+                }
+                // Glow
+                g2.setColor(withAlpha(photonColor, 30));
+                g2.setStroke(new BasicStroke(8));
+                g2.draw(ePath);
+                // Main line
+                g2.setColor(photonColor);
+                g2.setStroke(new BasicStroke(2.5f));
+                g2.draw(ePath);
+
+                // B-field (horizontal, phase shifted)
+                GeneralPath bPath = new GeneralPath();
+                started = false;
+                g2.setColor(withAlpha(photonColor, 100));
+                for (int px = 0; px < waveLen; px++) {
+                    double dist = px - packetCenter;
+                    double envelope = Math.exp(-(dist * dist) / (packetWidth * packetWidth));
+                    double xOff = amplitude * 0.6 * envelope * Math.cos(px * waveFreq);
+                    float drawX = (float)(waveStartX + px);
+                    float drawY = (float)(waveY + xOff * 0.3);
+                    if (!started) { bPath.moveTo(drawX, drawY); started = true; }
+                    else bPath.lineTo(drawX, drawY);
+                }
+                g2.setStroke(new BasicStroke(1.5f));
+                g2.draw(bPath);
+
+                // Photon particle (bright dot at center of packet)
+                int dotX = waveStartX + (int)packetCenter;
+                if (dotX > waveStartX && dotX < waveStartX + waveLen) {
+                    drawGlowCircle(g2, dotX, waveY, 8, photonColor);
+                }
+
+                // Labels
+                g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+                g2.setColor(photonColor);
+                g2.drawString("E-field", waveStartX, waveY - 60);
+                g2.setColor(withAlpha(photonColor, 150));
+                g2.drawString("B-field", waveStartX, waveY + 40);
+            }
+
+            // Propagation axis
+            g2.setColor(withAlpha(TEXT_COLOR, 40));
+            g2.setStroke(new BasicStroke(1));
+            g2.drawLine(waveStartX, waveY, waveStartX + waveLen, waveY);
+            g2.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            g2.setColor(withAlpha(TEXT_COLOR, 100));
+            g2.drawString("direction of propagation ->", waveStartX + waveLen / 2 - 80, waveY + 80);
+
+            // --- Bottom: Energy level diagram ---
+            int diagY = h - 160;
+            int diagH = 120;
+            int diagX = 30;
+            int diagW = w - 60;
+
+            g2.setFont(new Font("SansSerif", Font.BOLD, 13));
+            drawGlowString(g2, "Energy Level Diagram", diagX, diagY - 10, ACCENT);
+
+            for (int n = 1; n <= 6; n++) {
+                // Use linear spacing by level number to avoid overlap
+                int ly = diagY + diagH - (n - 1) * (diagH / 5);
+
+                float hue = (n - 1) / 6.0f;
+                Color c = Color.getHSBColor(hue, 0.7f, 0.9f);
+                boolean isFrom = (n == selectedLevel);
+                boolean isTo = (n == targetLevel);
+
+                g2.setColor(isFrom || isTo ? c : withAlpha(c, 100));
+                g2.setStroke(new BasicStroke(isFrom || isTo ? 3 : 1.5f));
+                int lineX = diagX + 80;
+                int lineW = 150;
+                g2.drawLine(lineX, ly, lineX + lineW, ly);
+
+                g2.setFont(new Font("Monospaced", Font.PLAIN, 10));
+                g2.setColor(c);
+                g2.drawString(String.format("n=%d  %.2f eV", n, ENERGY_LEVELS[n - 1]), lineX + lineW + 10, ly + 4);
+            }
+            g2.setStroke(new BasicStroke(1));
+
+            // Wavelength and color bar
+            g2.setFont(new Font("SansSerif", Font.BOLD, 14));
+            g2.setColor(photonColor);
+            String wlStr = String.format("Wavelength: %.0f nm", wavelengthNm);
+            g2.drawString(wlStr, diagX + 350, diagY + 20);
+
+            // Color swatch
+            g2.setColor(photonColor);
+            g2.fillRoundRect(diagX + 350, diagY + 30, 100, 20, 5, 5);
+            g2.setColor(withAlpha(photonColor, 40));
+            g2.fillRoundRect(diagX + 345, diagY + 25, 110, 30, 8, 8);
+
+            // Visible / invisible indicator
+            g2.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            g2.setColor(TEXT_COLOR);
+            String visStr;
+            if (wavelengthNm < 380) visStr = "(Ultraviolet - invisible)";
+            else if (wavelengthNm > 780) visStr = "(Infrared - invisible)";
+            else visStr = "(Visible light)";
+            g2.drawString(visStr, diagX + 350, diagY + 70);
+
+            // Spectrum bar at very bottom
+            int specY = h - 18;
+            for (int px = 0; px < diagW; px++) {
+                double wl = 380 + (px / (double)diagW) * 400;
+                Color sc = wavelengthToColor(wl);
+                g2.setColor(sc);
+                g2.drawLine(diagX + px, specY, diagX + px, specY + 12);
+            }
+            // Marker for current wavelength
+            if (wavelengthNm >= 380 && wavelengthNm <= 780) {
+                int markerX = diagX + (int)((wavelengthNm - 380) / 400 * diagW);
+                g2.setColor(Color.WHITE);
+                g2.fillPolygon(
+                    new int[]{markerX - 4, markerX + 4, markerX},
+                    new int[]{specY - 2, specY - 2, specY + 3}, 3);
+            }
+        }
+    }
+
+    // =====================================================================
+    // TAB 10: Overview
     // =====================================================================
 
     /**
