@@ -2577,92 +2577,96 @@ public class MathExplorer extends JFrame {
         /**
          * Draws the Fibonacci squares and golden spiral arcs.
          */
+        /**
+         * Draws Fibonacci squares and quarter-circle arcs forming the golden spiral.
+         * Uses screen coordinates (Y down) throughout to avoid mismatch.
+         */
         private void drawFibonacciSpiral(Graphics2D g2, int cx, int cy, int maxSq) {
+            if (maxSq <= 0) return;
+
             long[] fibs = new long[maxSq + 2];
             fibs[0] = 1;
             if (maxSq > 0) fibs[1] = 1;
-            for (int i = 2; i <= maxSq; i++) fibs[i] = fibs[i - 1] + fibs[i - 2];
+            for (int i = 2; i < maxSq; i++) fibs[i] = fibs[i - 1] + fibs[i - 2];
 
-            double scale = 3.5;
-            // Reduce scale for large Fibonacci numbers
-            if (maxSq > 8) scale = 1.5;
-            if (maxSq > 10) scale = 0.8;
+            // Auto-scale to fit in available area
+            long maxFib = fibs[maxSq - 1];
+            double scale = Math.min(350.0, Math.min(cx - 30, cy - 50)) / maxFib;
 
-            double x = 0, y = 0;
-            int dir = 0; // 0=right, 1=up, 2=left, 3=down
+            // Track the top-left corner of each square in screen coords
+            // Start first square at center
+            double sqX = cx - fibs[0] * scale / 2;
+            double sqY = cy - fibs[0] * scale / 2;
+
+            // Direction cycle: 0=right, 1=down, 2=left, 3=up
+            // This determines where the NEXT square is placed relative to current
+            int dir = 0;
 
             for (int i = 0; i < maxSq; i++) {
-                double side = fibs[i] * scale;
+                int side = (int)(fibs[i] * scale);
+                int px = (int) sqX;
+                int py = (int) sqY;
+
                 float hue = i / (float) Math.max(maxSq, 1);
                 Color sqColor = Color.getHSBColor(hue, 0.6f, 0.9f);
 
-                int sx = cx + (int) x;
-                int sy = cy - (int) y;
-
-                double drawX = x, drawY = y;
-
-                // Position adjustment based on direction
-                switch (dir) {
-                    case 0: break;
-                    case 1: drawY = y + side; break;
-                    case 2: drawX = x - side; drawY = y + side; break;
-                    case 3: drawX = x - side; break;
-                }
-
-                int px = cx + (int) drawX;
-                int py = cy - (int) drawY;
-
                 // Fill square
                 g2.setColor(withAlpha(sqColor, 40));
-                g2.fillRect(px, py, (int) side, (int) side);
+                g2.fillRect(px, py, side, side);
 
-                // Draw square border
+                // Border
                 g2.setColor(sqColor);
                 g2.setStroke(new BasicStroke(2));
-                g2.drawRect(px, py, (int) side, (int) side);
+                g2.drawRect(px, py, side, side);
 
                 // Label
                 if (side > 15) {
-                    g2.setFont(new Font("SansSerif", Font.BOLD, Math.max(8, Math.min(14, (int) (side / 4)))));
+                    g2.setFont(new Font("SansSerif", Font.BOLD, Math.max(8, Math.min(14, side / 4))));
                     g2.setColor(withAlpha(sqColor, 200));
-                    g2.drawString(String.valueOf(fibs[i]), px + 4, py + (int) side - 4);
+                    g2.drawString(String.valueOf(fibs[i]), px + 4, py + side - 4);
                 }
 
-                // Draw arc (quarter circle)
-                g2.setColor(withAlpha(new Color(255, 255, 255), 180));
+                // Quarter-circle arc inside this square
+                // The arc center is at the corner where the spiral continues
+                g2.setColor(withAlpha(new Color(255, 255, 255), 200));
                 g2.setStroke(new BasicStroke(2.5f));
-                int arcX, arcY;
-                int startAngle;
+                int diameter = side * 2;
                 switch (dir) {
-                    case 0:
-                        arcX = px + (int) side - (int) (2 * side);
-                        arcY = py;
-                        startAngle = 0;
+                    case 0: // next goes right -> arc from bottom-left corner
+                        g2.drawArc(px - side, py, diameter, diameter, 0, 90);
                         break;
-                    case 1:
-                        arcX = px;
-                        arcY = py + (int) side - (int) (2 * side);
-                        startAngle = 270;
+                    case 1: // next goes down -> arc from bottom-right corner
+                        g2.drawArc(px - side, py - side, diameter, diameter, 270, 90);
                         break;
-                    case 2:
-                        arcX = px;
-                        arcY = py;
-                        startAngle = 180;
+                    case 2: // next goes left -> arc from top-right corner
+                        g2.drawArc(px, py - side, diameter, diameter, 180, 90);
                         break;
-                    default:
-                        arcX = px + (int) side - (int) (2 * side);
-                        arcY = py;
-                        startAngle = 90;
+                    case 3: // next goes up -> arc from top-left corner
+                        g2.drawArc(px, py, diameter, diameter, 90, 90);
                         break;
                 }
-                g2.drawArc(arcX, arcY, (int) (2 * side), (int) (2 * side), startAngle, 90);
 
-                // Move position for next square
-                switch (dir) {
-                    case 0: x += side; break;
-                    case 1: y += side; break;
-                    case 2: x -= side; break;
-                    case 3: y -= side; break;
+                // Compute next square position
+                if (i + 1 < maxSq) {
+                    int nextSide = (int)(fibs[i + 1] * scale);
+                    switch (dir) {
+                        case 0: // place next to the right
+                            sqX = px + side;
+                            sqY = py + side - nextSide;
+                            break;
+                        case 1: // place next below
+                            sqX = px + side - nextSide;
+                            sqY = py + side;
+                            break;
+                        case 2: // place next to the left
+                            sqX = px - nextSide;
+                            sqY = py;
+                            break;
+                        case 3: // place next above
+                            sqX = px;
+                            sqY = py - nextSide;
+                            break;
+                    }
                 }
                 dir = (dir + 1) % 4;
             }
