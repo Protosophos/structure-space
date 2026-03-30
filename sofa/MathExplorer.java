@@ -51,16 +51,22 @@ public class MathExplorer extends JFrame {
         tabbedPane.setForeground(Color.WHITE);
         tabbedPane.setFont(new Font("SansSerif", Font.BOLD, 12));
 
-        tabbedPane.addTab("1. Fibonacci Matrix", new FibonacciMatrixPanel());
-        tabbedPane.addTab("2. Vector Transform (2x2)", new VectorTransformPanel());
-        tabbedPane.addTab("3. Eigenvalues", new EigenvaluePanel());
-        tabbedPane.addTab("4. Matrix Exp", new MatrixExpPanel());
-        tabbedPane.addTab("5. Fibonacci Spiral", new FibSpiralPanel());
-        tabbedPane.addTab("6. Dimensions", new DimensionsPanel());
-        tabbedPane.addTab("7. Circle & Pi", new CirclePiPanel());
-        tabbedPane.addTab("8. Norms", new NormsPanel());
-        tabbedPane.addTab("9. Photon", new PhotonPanel());
-        tabbedPane.addTab("10. Overview", new OverviewPanel(tabbedPane));
+        tabbedPane.addTab("Fib Matrix", new FibonacciMatrixPanel());
+        tabbedPane.addTab("Vectors", new VectorTransformPanel());
+        tabbedPane.addTab("Eigenval", new EigenvaluePanel());
+        tabbedPane.addTab("Matrix Exp", new MatrixExpPanel());
+        tabbedPane.addTab("Taylor", new TaylorExpPanel());
+        tabbedPane.addTab("e^x Props", new ExpPropertiesPanel());
+        tabbedPane.addTab("Euler", new EulerFormulaPanel());
+        tabbedPane.addTab("DiffEq", new DiffEqLaplacePanel());
+        tabbedPane.addTab("Spiral", new FibSpiralPanel());
+        tabbedPane.addTab("Dimensions", new DimensionsPanel());
+        tabbedPane.addTab("Circle/Pi", new CirclePiPanel());
+        tabbedPane.addTab("Norms", new NormsPanel());
+        tabbedPane.addTab("Photon", new PhotonPanel());
+        tabbedPane.addTab("Spacetime", new SpacetimePanel());
+        tabbedPane.addTab("Redshift", new RedshiftPanel());
+        tabbedPane.addTab("Overview", new OverviewPanel(tabbedPane));
 
         add(tabbedPane);
     }
@@ -1332,7 +1338,1163 @@ public class MathExplorer extends JFrame {
     }
 
     // =====================================================================
-    // TAB 5: Fibonacci Spiral & Convergence
+    // TAB 5: Taylor Series e^x
+    // =====================================================================
+
+    /**
+     * Panel showing the Taylor series approximation of e^x with animated
+     * polynomial terms converging to the exponential function.
+     */
+    static class TaylorExpPanel extends JPanel {
+        private int maxTerms = 1;
+        private final int totalTerms = 12;
+        private double time = 0;
+        private double xMin = -5, xMax = 5;
+        private double yMin = -3, yMax = 15;
+        private boolean animating = false;
+        private int animFrame = 0;
+        private JSlider termsSlider;
+        private JSlider zoomSlider;
+        private JTextArea infoArea;
+        private JLabel formulaLabel;
+        private DrawPanel drawPanel;
+
+        /**
+         * Constructs the Taylor Series panel with controls and plot area.
+         */
+        public TaylorExpPanel() {
+            setLayout(new BorderLayout());
+            setBackground(PANEL_BG);
+
+            drawPanel = new DrawPanel();
+
+            // --- Right sidebar ---
+            JPanel sidebar = new JPanel();
+            sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
+            sidebar.setBackground(new Color(25, 25, 45));
+            sidebar.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+            sidebar.setPreferredSize(new Dimension(280, 0));
+
+            JLabel title = new JLabel("Taylor Series");
+            title.setForeground(ACCENT);
+            title.setFont(new Font("SansSerif", Font.BOLD, 18));
+            title.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(title);
+            sidebar.add(Box.createVerticalStrut(5));
+
+            JLabel subtitle = new JLabel("Approximation of e^x");
+            subtitle.setForeground(new Color(180, 180, 200));
+            subtitle.setFont(new Font("SansSerif", Font.PLAIN, 13));
+            subtitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(subtitle);
+            sidebar.add(Box.createVerticalStrut(12));
+
+            JTextArea explanation = new JTextArea(
+                "The Taylor series breaks e^x\n" +
+                "into a sum of polynomials.\n\n" +
+                "With each new term, the\n" +
+                "colored curve gets closer\n" +
+                "to the white e^x curve.\n\n" +
+                "White line = exact e^x\n" +
+                "Colored lines = approximations"
+            );
+            explanation.setEditable(false);
+            explanation.setBackground(new Color(35, 35, 60));
+            explanation.setForeground(new Color(200, 200, 220));
+            explanation.setFont(new Font("SansSerif", Font.PLAIN, 12));
+            explanation.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            explanation.setMaximumSize(new Dimension(250, 170));
+            explanation.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(explanation);
+            sidebar.add(Box.createVerticalStrut(15));
+
+            // Terms slider
+            JLabel termsTitle = new JLabel("Number of terms");
+            termsTitle.setForeground(Color.WHITE);
+            termsTitle.setFont(new Font("SansSerif", Font.BOLD, 13));
+            termsTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(termsTitle);
+            sidebar.add(Box.createVerticalStrut(3));
+
+            termsSlider = new JSlider(0, totalTerms, 1);
+            termsSlider.setBackground(new Color(25, 25, 45));
+            termsSlider.setForeground(Color.WHITE);
+            termsSlider.setMajorTickSpacing(1);
+            termsSlider.setPaintTicks(true);
+            termsSlider.setPaintLabels(true);
+            termsSlider.setMaximumSize(new Dimension(250, 45));
+            termsSlider.setAlignmentX(Component.LEFT_ALIGNMENT);
+            termsSlider.addChangeListener(e -> {
+                maxTerms = termsSlider.getValue();
+                if (termsSlider.getValueIsAdjusting()) animating = false;
+                updateTaylorInfo();
+                drawPanel.repaint();
+            });
+            sidebar.add(termsSlider);
+            sidebar.add(Box.createVerticalStrut(10));
+
+            // Formula
+            formulaLabel = new JLabel("<html><b>T(x) = 1</b></html>");
+            formulaLabel.setForeground(new Color(255, 200, 100));
+            formulaLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+            formulaLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(formulaLabel);
+            sidebar.add(Box.createVerticalStrut(8));
+
+            // Info area
+            infoArea = new JTextArea(4, 20);
+            infoArea.setEditable(false);
+            infoArea.setBackground(new Color(35, 35, 60));
+            infoArea.setForeground(new Color(150, 255, 150));
+            infoArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
+            infoArea.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+            infoArea.setMaximumSize(new Dimension(250, 90));
+            infoArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(infoArea);
+            sidebar.add(Box.createVerticalStrut(12));
+
+            // Zoom
+            JLabel zoomTitle = new JLabel("Zoom");
+            zoomTitle.setForeground(Color.WHITE);
+            zoomTitle.setFont(new Font("SansSerif", Font.BOLD, 13));
+            zoomTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(zoomTitle);
+            sidebar.add(Box.createVerticalStrut(3));
+
+            zoomSlider = new JSlider(2, 20, 5);
+            zoomSlider.setBackground(new Color(25, 25, 45));
+            zoomSlider.setForeground(Color.WHITE);
+            zoomSlider.setMaximumSize(new Dimension(250, 30));
+            zoomSlider.setAlignmentX(Component.LEFT_ALIGNMENT);
+            zoomSlider.addChangeListener(e -> {
+                int val = zoomSlider.getValue();
+                xMin = -val; xMax = val;
+                yMin = -val * 0.6; yMax = val * 3;
+                drawPanel.repaint();
+            });
+            sidebar.add(zoomSlider);
+            sidebar.add(Box.createVerticalStrut(15));
+
+            // Animate button
+            JButton animBtn = createDarkButton("Animate");
+            animBtn.setBackground(new Color(52, 152, 219));
+            animBtn.setMaximumSize(new Dimension(250, 35));
+            animBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+            animBtn.addActionListener(e -> {
+                maxTerms = 0;
+                animFrame = 0;
+                animating = true;
+                termsSlider.setValue(0);
+                updateTaylorInfo();
+            });
+            sidebar.add(animBtn);
+            sidebar.add(Box.createVerticalGlue());
+
+            add(drawPanel, BorderLayout.CENTER);
+            add(sidebar, BorderLayout.EAST);
+
+            updateTaylorInfo();
+
+            javax.swing.Timer timer = new javax.swing.Timer(16, e -> {
+                time += 0.02;
+                if (animating) {
+                    animFrame++;
+                    if (animFrame >= 60) {
+                        animFrame = 0;
+                        maxTerms++;
+                        if (maxTerms <= totalTerms) {
+                            termsSlider.setValue(maxTerms);
+                            updateTaylorInfo();
+                        } else {
+                            maxTerms = totalTerms;
+                            animating = false;
+                        }
+                    }
+                }
+                drawPanel.repaint();
+            });
+            timer.start();
+        }
+
+        private void updateTaylorInfo() {
+            formulaLabel.setText("<html><b>" + buildTaylorFormula(maxTerms) + "</b></html>");
+            double approx = taylorExp(1.0, maxTerms);
+            double exact = Math.E;
+            double error = Math.abs(exact - approx);
+            String accuracy;
+            if (error < 1e-10) accuracy = "almost perfect!";
+            else if (error < 0.01) accuracy = "very good";
+            else if (error < 0.1) accuracy = "good";
+            else if (error < 1.0) accuracy = "rough";
+            else accuracy = "bad";
+            infoArea.setText(String.format(
+                "At x = 1:\n  Exact e  = %.8f\n  Approx   = %.8f\n  Error    = %.8f (%s)",
+                exact, approx, error, accuracy));
+        }
+
+        private String buildTaylorFormula(int n) {
+            StringBuilder sb = new StringBuilder("T(x) = ");
+            for (int i = 0; i < n && i < 8; i++) {
+                if (i > 0) sb.append(" + ");
+                if (i == 0) sb.append("1");
+                else if (i == 1) sb.append("x");
+                else sb.append("x^").append(i).append("/").append(i).append("!");
+            }
+            if (n > 8) sb.append(" + ...");
+            if (n == 0) sb.append("0");
+            return sb.toString();
+        }
+
+        private double taylorExp(double x, int terms) {
+            double sum = 0, power = 1, fact = 1;
+            for (int i = 0; i < terms; i++) {
+                if (i > 0) { power *= x; fact *= i; }
+                sum += power / fact;
+            }
+            return sum;
+        }
+
+        private Color getTaylorColor(int index, int total) {
+            float hue = (float) index / total;
+            return Color.getHSBColor(hue, 0.9f, 1.0f);
+        }
+
+        /** Inner panel for drawing the Taylor series plot. */
+        class DrawPanel extends JPanel {
+            DrawPanel() { setBackground(new Color(15, 15, 30)); }
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2 = (Graphics2D) g;
+                setupRendering(g2);
+
+                int w = getWidth(), h = getHeight();
+                int margin = 50;
+                int plotW = w - 2 * margin;
+                int plotH = h - 2 * margin;
+
+                // Background glow
+                int glowCx = margin + (int) ((0 - xMin) / (xMax - xMin) * plotW);
+                int glowCy = margin + (int) ((yMax - 0) / (yMax - yMin) * plotH);
+                for (int r = 250; r > 0; r -= 5) {
+                    float hue = (float) ((time * 0.02 + r * 0.001) % 1.0);
+                    Color c = Color.getHSBColor(hue, 0.3f, 0.12f);
+                    int alpha = clampAlpha((int) (25 * (1.0 - r / 250.0)));
+                    g2.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), alpha));
+                    g2.fillOval(glowCx - r, glowCy - r, r * 2, r * 2);
+                }
+
+                // Grid
+                g2.setColor(withAlpha(TEXT_COLOR, 20));
+                for (int i = (int) Math.ceil(xMin); i <= (int) Math.floor(xMax); i++) {
+                    int px = margin + (int) ((i - xMin) / (xMax - xMin) * plotW);
+                    g2.drawLine(px, margin, px, margin + plotH);
+                }
+                for (int i = (int) Math.ceil(yMin); i <= (int) Math.floor(yMax); i++) {
+                    int py = margin + (int) ((yMax - i) / (yMax - yMin) * plotH);
+                    g2.drawLine(margin, py, margin + plotW, py);
+                }
+
+                // Axes
+                g2.setColor(withAlpha(TEXT_COLOR, 80));
+                g2.setStroke(new BasicStroke(1.5f));
+                int originX = margin + (int) ((0 - xMin) / (xMax - xMin) * plotW);
+                int originY = margin + (int) ((yMax - 0) / (yMax - yMin) * plotH);
+                if (originX >= margin && originX <= margin + plotW)
+                    g2.drawLine(originX, margin, originX, margin + plotH);
+                if (originY >= margin && originY <= margin + plotH)
+                    g2.drawLine(margin, originY, margin + plotW, originY);
+
+                // Axis numbers
+                g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
+                g2.setColor(withAlpha(TEXT_COLOR, 150));
+                for (int i = (int) Math.ceil(xMin); i <= (int) Math.floor(xMax); i++) {
+                    if (i == 0) continue;
+                    int px = margin + (int) ((i - xMin) / (xMax - xMin) * plotW);
+                    if (originY >= margin && originY <= margin + plotH)
+                        g2.drawString(String.valueOf(i), px - 4, originY + 15);
+                }
+                for (int i = (int) Math.ceil(yMin); i <= (int) Math.floor(yMax); i++) {
+                    if (i == 0) continue;
+                    int py = margin + (int) ((yMax - i) / (yMax - yMin) * plotH);
+                    if (originX >= margin && originX <= margin + plotW)
+                        g2.drawString(String.valueOf(i), originX + 5, py + 4);
+                }
+
+                int steps = plotW * 2;
+                double dx = (xMax - xMin) / steps;
+                Shape clipRect = new java.awt.Rectangle(margin, margin, plotW, plotH);
+
+                // Real e^x (white glow line)
+                GeneralPath realPath = new GeneralPath();
+                boolean started = false;
+                for (int s = 0; s <= steps; s++) {
+                    double x = xMin + s * dx;
+                    double y = Math.exp(x);
+                    if (y < yMin - 10 || y > yMax + 10) { started = false; continue; }
+                    float px = (float) (margin + (x - xMin) / (xMax - xMin) * plotW);
+                    float py = (float) (margin + (yMax - y) / (yMax - yMin) * plotH);
+                    if (!started) { realPath.moveTo(px, py); started = true; }
+                    else realPath.lineTo(px, py);
+                }
+                Shape oldClip = g2.getClip();
+                g2.setClip(clipRect);
+                g2.setColor(withAlpha(TEXT_COLOR, 25));
+                g2.setStroke(new BasicStroke(10f));
+                g2.draw(realPath);
+                g2.setColor(withAlpha(TEXT_COLOR, 200));
+                g2.setStroke(new BasicStroke(3f));
+                g2.draw(realPath);
+                g2.setClip(oldClip);
+
+                // Taylor approximations
+                for (int n = 1; n <= maxTerms; n++) {
+                    Color color = getTaylorColor(n - 1, totalTerms);
+                    boolean isLatest = (n == maxTerms);
+                    int alpha = isLatest ? 255 : 50 + (int) (100.0 * n / maxTerms);
+
+                    GeneralPath path = new GeneralPath();
+                    started = false;
+                    double prevY = 0;
+                    for (int s = 0; s <= steps; s++) {
+                        double x = xMin + s * dx;
+                        double y = taylorExp(x, n);
+                        if (Double.isNaN(y) || Double.isInfinite(y) || Math.abs(y) > 1e6) {
+                            started = false; continue;
+                        }
+                        if (started && Math.abs(y - prevY) > (yMax - yMin) * 2) started = false;
+                        prevY = y;
+                        float px = (float) (margin + (x - xMin) / (xMax - xMin) * plotW);
+                        float py = (float) (margin + (yMax - y) / (yMax - yMin) * plotH);
+                        if (!started) { path.moveTo(px, py); started = true; }
+                        else path.lineTo(px, py);
+                    }
+                    oldClip = g2.getClip();
+                    g2.setClip(clipRect);
+                    if (isLatest) {
+                        g2.setColor(withAlpha(color, 35));
+                        g2.setStroke(new BasicStroke(10f));
+                        g2.draw(path);
+                    }
+                    g2.setColor(withAlpha(color, alpha));
+                    g2.setStroke(new BasicStroke(isLatest ? 3.5f : 1.5f));
+                    g2.draw(path);
+                    g2.setClip(oldClip);
+                }
+
+                // Legend
+                int lx = margin + 12, ly = margin + 22;
+                g2.setFont(new Font("SansSerif", Font.BOLD, 11));
+                int legendH = 20 + Math.min(maxTerms, 8) * 16 + 5;
+                g2.setColor(colorWithAlpha(15, 15, 30, 180));
+                g2.fillRoundRect(lx - 8, ly - 18, 150, legendH, 8, 8);
+                g2.setColor(withAlpha(TEXT_COLOR, 220));
+                g2.fillRect(lx - 3, ly - 12, 10, 10);
+                g2.drawString("e^x (exact)", lx + 12, ly - 3);
+                ly += 18;
+                int showCount = Math.min(maxTerms, 8);
+                for (int n = maxTerms - showCount + 1; n <= maxTerms; n++) {
+                    if (n < 1) continue;
+                    Color c = getTaylorColor(n - 1, totalTerms);
+                    g2.setColor(withAlpha(c, (n == maxTerms) ? 255 : 140));
+                    g2.fillRect(lx - 3, ly - 9, 10, 10);
+                    g2.drawString("Degree " + (n - 1), lx + 12, ly);
+                    ly += 16;
+                }
+
+                // Title
+                g2.setFont(new Font("SansSerif", Font.BOLD, 18));
+                drawGlowString(g2, "Taylor Series: e^x", margin, margin - 15, ACCENT);
+
+                // Formula top right
+                g2.setFont(new Font("Monospaced", Font.BOLD, 13));
+                float fHue = (float) ((time * 0.04) % 1.0);
+                g2.setColor(Color.getHSBColor(fHue, 0.5f, 1.0f));
+                String formula = "e^x = 1 + x + x^2/2! + x^3/3! + ...";
+                int fw = g2.getFontMetrics().stringWidth(formula);
+                g2.drawString(formula, margin + plotW - fw, margin - 15);
+
+                // Border
+                g2.setColor(withAlpha(TEXT_COLOR, 40));
+                g2.setStroke(new BasicStroke(1));
+                g2.drawRect(margin, margin, plotW, plotH);
+            }
+        }
+    }
+
+    // =====================================================================
+    // TAB 6: e^x Properties (derivative, growth/decay, ln, limit definition)
+    // =====================================================================
+
+    /**
+     * Panel showing key properties of e^x: derivative equals itself,
+     * growth/decay with parameters, ln(x) as inverse, and the limit definition.
+     */
+    static class ExpPropertiesPanel extends JPanel {
+        private double paramA = 1.0, paramB = 1.0;
+        private int limitN = 1;
+        private int animFrame = 0;
+        private boolean animating = false;
+        private javax.swing.Timer animTimer;
+        private JSlider aSlider, bSlider, nSlider;
+
+        /**
+         * Constructs the e^x properties panel.
+         */
+        public ExpPropertiesPanel() {
+            setLayout(new BorderLayout());
+            setBackground(PANEL_BG);
+
+            // Sidebar
+            JPanel sidebar = new JPanel();
+            sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
+            sidebar.setBackground(new Color(25, 25, 45));
+            sidebar.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+            sidebar.setPreferredSize(new Dimension(240, 0));
+
+            JLabel title = new JLabel("e^x Properties");
+            title.setForeground(ACCENT);
+            title.setFont(new Font("SansSerif", Font.BOLD, 16));
+            title.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(title);
+            sidebar.add(Box.createVerticalStrut(10));
+
+            JTextArea info = new JTextArea(
+                "Key properties of e^x:\n\n" +
+                "1. (e^x)' = e^x\n" +
+                "   Its own derivative!\n\n" +
+                "2. a*e^(bx)\n" +
+                "   b>0: growth\n" +
+                "   b<0: decay\n\n" +
+                "3. ln(x) is the inverse\n" +
+                "   of e^x\n\n" +
+                "4. e = lim (1+1/n)^n"
+            );
+            info.setEditable(false);
+            info.setBackground(new Color(35, 35, 60));
+            info.setForeground(new Color(200, 200, 220));
+            info.setFont(new Font("Monospaced", Font.PLAIN, 11));
+            info.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+            info.setMaximumSize(new Dimension(220, 200));
+            info.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(info);
+            sidebar.add(Box.createVerticalStrut(12));
+
+            // Parameter a
+            sidebar.add(makeLabel("a (amplitude)"));
+            aSlider = new JSlider(-30, 30, 10); // /10
+            styleSmallSlider(aSlider);
+            aSlider.addChangeListener(e -> { paramA = aSlider.getValue() / 10.0; repaint(); });
+            sidebar.add(aSlider);
+            sidebar.add(Box.createVerticalStrut(5));
+
+            // Parameter b
+            sidebar.add(makeLabel("b (rate)"));
+            bSlider = new JSlider(-30, 30, 10); // /10
+            styleSmallSlider(bSlider);
+            bSlider.addChangeListener(e -> { paramB = bSlider.getValue() / 10.0; repaint(); });
+            sidebar.add(bSlider);
+            sidebar.add(Box.createVerticalStrut(10));
+
+            // Limit n
+            sidebar.add(makeLabel("n for (1+1/n)^n"));
+            nSlider = new JSlider(1, 200, 1);
+            styleSmallSlider(nSlider);
+            nSlider.addChangeListener(e -> { limitN = nSlider.getValue(); repaint(); });
+            sidebar.add(nSlider);
+            sidebar.add(Box.createVerticalStrut(10));
+
+            JButton animBtn = createDarkButton("Animate n");
+            animBtn.setMaximumSize(new Dimension(220, 30));
+            animBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+            animBtn.addActionListener(e -> { animating = true; animFrame = 0; limitN = 1; nSlider.setValue(1); });
+            sidebar.add(animBtn);
+            sidebar.add(Box.createVerticalGlue());
+
+            add(sidebar, BorderLayout.EAST);
+
+            animTimer = new javax.swing.Timer(16, e -> {
+                animFrame++;
+                if (animating) {
+                    if (animFrame % 5 == 0 && limitN < 200) {
+                        limitN++;
+                        nSlider.setValue(limitN);
+                    }
+                    if (limitN >= 200) animating = false;
+                }
+                repaint();
+            });
+            animTimer.start();
+        }
+
+        private JLabel makeLabel(String text) {
+            JLabel l = new JLabel(text);
+            l.setForeground(Color.WHITE);
+            l.setFont(new Font("SansSerif", Font.BOLD, 11));
+            l.setAlignmentX(Component.LEFT_ALIGNMENT);
+            return l;
+        }
+
+        private void styleSmallSlider(JSlider s) {
+            s.setBackground(new Color(25, 25, 45));
+            s.setForeground(Color.WHITE);
+            s.setMaximumSize(new Dimension(220, 28));
+            s.setAlignmentX(Component.LEFT_ALIGNMENT);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g;
+            setupRendering(g2);
+
+            int w = getWidth() - 240;
+            int h = getHeight();
+            g2.setColor(PANEL_BG);
+            g2.fillRect(0, 0, w, h);
+
+            int halfW = w / 2;
+            int halfH = h / 2;
+
+            // --- Top left: e^x and its derivative ---
+            drawPlot(g2, 10, 10, halfW - 20, halfH - 20,
+                "f(x) = e^x and f'(x) = e^x", -4, 4, -1, 8,
+                new PlotFunc[]{
+                    new PlotFunc("e^x", x -> Math.exp(x), new Color(100, 200, 255)),
+                    new PlotFunc("(e^x)' = e^x", x -> Math.exp(x), new Color(255, 100, 100)),
+                },
+                "The derivative of e^x is itself!");
+
+            // --- Top right: a * e^(bx) growth/decay ---
+            String growLabel = String.format("f(x) = %.1f * e^(%.1fx)", paramA, paramB);
+            String growInfo = paramB > 0 ? "Growth (b > 0)" : paramB < 0 ? "Decay (b < 0)" : "Constant (b = 0)";
+            drawPlot(g2, halfW + 10, 10, halfW - 20, halfH - 20,
+                growLabel, -4, 4, -5, 10,
+                new PlotFunc[]{
+                    new PlotFunc("a*e^(bx)", x -> paramA * Math.exp(paramB * x), new Color(255, 200, 50)),
+                },
+                growInfo);
+
+            // --- Bottom left: e^x and ln(x) as inverses ---
+            drawPlot(g2, 10, halfH + 10, halfW - 20, halfH - 30,
+                "e^x and ln(x) are inverses", -4, 6, -4, 6,
+                new PlotFunc[]{
+                    new PlotFunc("e^x", x -> Math.exp(x), new Color(100, 200, 255)),
+                    new PlotFunc("ln(x)", x -> x > 0 ? Math.log(x) : Double.NaN, new Color(100, 255, 100)),
+                    new PlotFunc("y = x", x -> x, withAlpha(TEXT_COLOR, 100)),
+                },
+                "They mirror along y = x");
+
+            // --- Bottom right: limit definition ---
+            int lx = halfW + 10, ly = halfH + 10;
+            int lw = halfW - 20, lh = halfH - 30;
+            g2.setColor(colorWithAlpha(20, 20, 40, 200));
+            g2.fillRoundRect(lx, ly, lw, lh, 8, 8);
+
+            g2.setFont(new Font("SansSerif", Font.BOLD, 14));
+            drawGlowString(g2, "Limit Definition of e", lx + 10, ly + 25, ACCENT);
+
+            g2.setFont(new Font("Monospaced", Font.BOLD, 14));
+            g2.setColor(new Color(255, 200, 100));
+            g2.drawString("e = lim (1 + 1/n)^n", lx + 20, ly + 55);
+
+            double limitVal = Math.pow(1.0 + 1.0 / limitN, limitN);
+            g2.setFont(new Font("Monospaced", Font.BOLD, 16));
+            g2.setColor(new Color(100, 255, 100));
+            g2.drawString(String.format("n = %d", limitN), lx + 20, ly + 90);
+            g2.drawString(String.format("(1 + 1/%d)^%d = %.10f", limitN, limitN, limitVal), lx + 20, ly + 115);
+
+            g2.setColor(new Color(255, 150, 150));
+            g2.drawString(String.format("e             = %.10f", Math.E), lx + 20, ly + 145);
+
+            double error = Math.abs(Math.E - limitVal);
+            g2.setColor(TEXT_COLOR);
+            g2.setFont(new Font("SansSerif", Font.PLAIN, 13));
+            g2.drawString(String.format("Error: %.10f", error), lx + 20, ly + 175);
+
+            // Convergence bar
+            int barX = lx + 20, barY = ly + 195, barW = lw - 40, barH = 20;
+            g2.setColor(withAlpha(TEXT_COLOR, 40));
+            g2.fillRoundRect(barX, barY, barW, barH, 5, 5);
+            double progress = Math.min(1.0, 1.0 - error / 0.5);
+            g2.setColor(new Color(100, 255, 100));
+            g2.fillRoundRect(barX, barY, (int)(barW * progress), barH, 5, 5);
+            g2.setColor(Color.WHITE);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 11));
+            g2.drawString("Convergence to e", barX + barW / 2 - 55, barY + 14);
+        }
+
+        /**
+         * Draws a small plot with multiple functions.
+         */
+        private void drawPlot(Graphics2D g2, int px, int py, int pw, int ph,
+                              String title, double xMin, double xMax, double yMin, double yMax,
+                              PlotFunc[] funcs, String note) {
+            g2.setColor(colorWithAlpha(20, 20, 40, 200));
+            g2.fillRoundRect(px, py, pw, ph, 8, 8);
+
+            int margin = 30;
+            int plotW = pw - 2 * margin;
+            int plotH = ph - 2 * margin - 15;
+            int ox = px + margin;
+            int oy = py + margin + 15;
+
+            // Title
+            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+            drawGlowString(g2, title, px + 10, py + 18, ACCENT);
+
+            // Grid
+            g2.setColor(withAlpha(TEXT_COLOR, 15));
+            for (int i = (int)Math.ceil(xMin); i <= (int)Math.floor(xMax); i++) {
+                int gx = ox + (int)((i - xMin) / (xMax - xMin) * plotW);
+                g2.drawLine(gx, oy, gx, oy + plotH);
+            }
+            for (int i = (int)Math.ceil(yMin); i <= (int)Math.floor(yMax); i++) {
+                int gy = oy + (int)((yMax - i) / (yMax - yMin) * plotH);
+                g2.drawLine(ox, gy, ox + plotW, gy);
+            }
+
+            // Axes
+            g2.setColor(withAlpha(TEXT_COLOR, 60));
+            g2.setStroke(new BasicStroke(1));
+            int axisX = ox + (int)((0 - xMin) / (xMax - xMin) * plotW);
+            int axisY = oy + (int)((yMax - 0) / (yMax - yMin) * plotH);
+            if (axisX >= ox && axisX <= ox + plotW) g2.drawLine(axisX, oy, axisX, oy + plotH);
+            if (axisY >= oy && axisY <= oy + plotH) g2.drawLine(ox, axisY, ox + plotW, axisY);
+
+            // Plot functions
+            Shape oldClip = g2.getClip();
+            g2.setClip(ox, oy, plotW, plotH);
+            int steps = plotW * 2;
+            double dx = (xMax - xMin) / steps;
+            for (PlotFunc f : funcs) {
+                GeneralPath path = new GeneralPath();
+                boolean started = false;
+                for (int s = 0; s <= steps; s++) {
+                    double x = xMin + s * dx;
+                    double y = f.func.applyAsDouble(x);
+                    if (Double.isNaN(y) || Double.isInfinite(y) || Math.abs(y) > 1e6) { started = false; continue; }
+                    float fx = (float)(ox + (x - xMin) / (xMax - xMin) * plotW);
+                    float fy = (float)(oy + (yMax - y) / (yMax - yMin) * plotH);
+                    if (!started) { path.moveTo(fx, fy); started = true; }
+                    else path.lineTo(fx, fy);
+                }
+                g2.setColor(withAlpha(f.color, 30));
+                g2.setStroke(new BasicStroke(6f));
+                g2.draw(path);
+                g2.setColor(f.color);
+                g2.setStroke(new BasicStroke(2f));
+                g2.draw(path);
+            }
+            g2.setClip(oldClip);
+
+            // Note
+            g2.setFont(new Font("SansSerif", Font.ITALIC, 11));
+            g2.setColor(withAlpha(TEXT_COLOR, 150));
+            g2.drawString(note, px + 10, py + ph - 8);
+            g2.setStroke(new BasicStroke(1));
+        }
+
+        /** Helper class for plot functions. */
+        static class PlotFunc {
+            String name;
+            java.util.function.DoubleUnaryOperator func;
+            Color color;
+            PlotFunc(String n, java.util.function.DoubleUnaryOperator f, Color c) {
+                this.name = n; this.func = f; this.color = c;
+            }
+        }
+    }
+
+    // =====================================================================
+    // TAB 7: Euler Formula (e^(ix) = cos(x) + i*sin(x))
+    // =====================================================================
+
+    /**
+     * Panel visualizing Euler's formula on the complex plane,
+     * showing e^(ix) as rotation, and Euler's identity e^(i*pi)+1=0.
+     */
+    static class EulerFormulaPanel extends JPanel {
+        private double angle = 0;
+        private double realPart = 0;
+        private int animFrame = 0;
+        private javax.swing.Timer animTimer;
+        private JSlider angleSlider, realSlider;
+
+        /**
+         * Constructs the Euler Formula panel.
+         */
+        public EulerFormulaPanel() {
+            setLayout(new BorderLayout());
+            setBackground(PANEL_BG);
+
+            JPanel sidebar = new JPanel();
+            sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
+            sidebar.setBackground(new Color(25, 25, 45));
+            sidebar.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+            sidebar.setPreferredSize(new Dimension(260, 0));
+
+            JLabel title = new JLabel("Euler's Formula");
+            title.setForeground(ACCENT);
+            title.setFont(new Font("SansSerif", Font.BOLD, 16));
+            title.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(title);
+            sidebar.add(Box.createVerticalStrut(8));
+
+            JTextArea info = new JTextArea(
+                "Euler's formula:\n\n" +
+                "e^(ix) = cos(x) + i*sin(x)\n\n" +
+                "This connects:\n" +
+                "- Exponentials\n" +
+                "- Trigonometry\n" +
+                "- Complex numbers\n" +
+                "- Rotation\n\n" +
+                "e^(ix) traces the unit\n" +
+                "circle in the complex plane.\n\n" +
+                "Adding a real part (a):\n" +
+                "e^((a+ix)) = e^a * e^(ix)\n" +
+                "= growth/decay + rotation"
+            );
+            info.setEditable(false);
+            info.setBackground(new Color(35, 35, 60));
+            info.setForeground(new Color(200, 200, 220));
+            info.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            info.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+            info.setMaximumSize(new Dimension(240, 260));
+            info.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(info);
+            sidebar.add(Box.createVerticalStrut(12));
+
+            // Angle slider (x in e^(ix))
+            JLabel aLabel = new JLabel("x (angle in radians)");
+            aLabel.setForeground(Color.WHITE);
+            aLabel.setFont(new Font("SansSerif", Font.BOLD, 11));
+            aLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(aLabel);
+            angleSlider = new JSlider(0, 628, 0); // 0 to 2*pi * 100
+            angleSlider.setBackground(new Color(25, 25, 45));
+            angleSlider.setForeground(Color.WHITE);
+            angleSlider.setMaximumSize(new Dimension(240, 28));
+            angleSlider.setAlignmentX(Component.LEFT_ALIGNMENT);
+            angleSlider.addChangeListener(e -> { angle = angleSlider.getValue() / 100.0; repaint(); });
+            sidebar.add(angleSlider);
+            sidebar.add(Box.createVerticalStrut(8));
+
+            // Real part slider (a in e^((a+ix)))
+            JLabel rLabel = new JLabel("a (real part, growth/decay)");
+            rLabel.setForeground(Color.WHITE);
+            rLabel.setFont(new Font("SansSerif", Font.BOLD, 11));
+            rLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(rLabel);
+            realSlider = new JSlider(-20, 20, 0); // /10
+            realSlider.setBackground(new Color(25, 25, 45));
+            realSlider.setForeground(Color.WHITE);
+            realSlider.setMaximumSize(new Dimension(240, 28));
+            realSlider.setAlignmentX(Component.LEFT_ALIGNMENT);
+            realSlider.addChangeListener(e -> { realPart = realSlider.getValue() / 10.0; repaint(); });
+            sidebar.add(realSlider);
+            sidebar.add(Box.createVerticalStrut(15));
+
+            // Euler identity box
+            JTextArea identity = new JTextArea(
+                "Euler's Identity (x = pi):\n\n" +
+                "  e^(i*pi) + 1 = 0\n\n" +
+                "Connects: e, i, pi, 1, 0"
+            );
+            identity.setEditable(false);
+            identity.setBackground(new Color(50, 30, 30));
+            identity.setForeground(new Color(255, 200, 150));
+            identity.setFont(new Font("Monospaced", Font.BOLD, 12));
+            identity.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            identity.setMaximumSize(new Dimension(240, 100));
+            identity.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(identity);
+
+            sidebar.add(Box.createVerticalGlue());
+            add(sidebar, BorderLayout.EAST);
+
+            animTimer = new javax.swing.Timer(16, e -> { animFrame++; repaint(); });
+            animTimer.start();
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g;
+            setupRendering(g2);
+
+            int w = getWidth() - 260;
+            int h = getHeight();
+            g2.setColor(PANEL_BG);
+            g2.fillRect(0, 0, w, h);
+
+            int cx = w / 2;
+            int cy = h / 2;
+            double scale = Math.min(w, h) * 0.25;
+
+            // Title
+            g2.setFont(new Font("SansSerif", Font.BOLD, 18));
+            drawGlowString(g2, "Euler's Formula: e^(ix) = cos(x) + i*sin(x)", 20, 28, ACCENT);
+
+            // Grid
+            g2.setColor(withAlpha(TEXT_COLOR, 15));
+            for (int i = -5; i <= 5; i++) {
+                g2.drawLine(cx + (int)(i * scale), 40, cx + (int)(i * scale), h - 10);
+                g2.drawLine(10, cy - (int)(i * scale), w - 10, cy - (int)(i * scale));
+            }
+
+            // Axes
+            g2.setColor(withAlpha(TEXT_COLOR, 80));
+            g2.setStroke(new BasicStroke(1.5f));
+            g2.drawLine(10, cy, w - 10, cy);
+            g2.drawLine(cx, 40, cx, h - 10);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+            g2.setColor(TEXT_COLOR);
+            g2.drawString("Real", w - 45, cy - 8);
+            g2.drawString("Imaginary", cx + 8, 55);
+
+            // Unit circle
+            g2.setColor(withAlpha(TEXT_COLOR, 40));
+            g2.setStroke(new BasicStroke(1.5f));
+            int ucr = (int) scale;
+            g2.drawOval(cx - ucr, cy - ucr, ucr * 2, ucr * 2);
+
+            // Draw spiral trace for e^((a+ix)) for x from 0 to current angle
+            double r0 = Math.exp(realPart * 0);
+            GeneralPath spiral = new GeneralPath();
+            boolean started = false;
+            int traceSteps = (int)(angle * 50) + 1;
+            for (int s = 0; s <= traceSteps; s++) {
+                double t = angle * s / traceSteps;
+                double radius = Math.exp(realPart * t / (2 * Math.PI)) * scale;
+                double px = cx + radius * Math.cos(t);
+                double py = cy - radius * Math.sin(t);
+                if (!started) { spiral.moveTo((float)px, (float)py); started = true; }
+                else spiral.lineTo((float)px, (float)py);
+            }
+            float traceHue = (float)((animFrame * 0.005) % 1.0);
+            Color traceColor = Color.getHSBColor(traceHue, 0.8f, 1.0f);
+            g2.setColor(withAlpha(traceColor, 30));
+            g2.setStroke(new BasicStroke(6));
+            g2.draw(spiral);
+            g2.setColor(traceColor);
+            g2.setStroke(new BasicStroke(2.5f));
+            g2.draw(spiral);
+
+            // Current point
+            double radius = Math.exp(realPart * angle / (2 * Math.PI)) * scale;
+            double pointX = cx + radius * Math.cos(angle);
+            double pointY = cy - radius * Math.sin(angle);
+
+            // Projections
+            g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{5, 3}, 0));
+            g2.setColor(withAlpha(new Color(100, 200, 255), 120));
+            g2.drawLine((int)pointX, (int)pointY, (int)pointX, cy); // to real axis
+            g2.setColor(withAlpha(new Color(100, 255, 100), 120));
+            g2.drawLine((int)pointX, (int)pointY, cx, (int)pointY); // to imaginary axis
+            g2.setStroke(new BasicStroke(1));
+
+            // Radius line
+            g2.setColor(withAlpha(Color.WHITE, 150));
+            g2.setStroke(new BasicStroke(2));
+            g2.drawLine(cx, cy, (int)pointX, (int)pointY);
+
+            // Point
+            drawGlowCircle(g2, (int)pointX, (int)pointY, 8, traceColor);
+
+            // Angle arc
+            if (angle > 0.05) {
+                g2.setColor(withAlpha(new Color(255, 200, 100), 100));
+                g2.setStroke(new BasicStroke(2));
+                int arcR = 40;
+                g2.drawArc(cx - arcR, cy - arcR, arcR * 2, arcR * 2, 0, (int)Math.toDegrees(angle));
+            }
+            g2.setStroke(new BasicStroke(1));
+
+            // Labels
+            double cosVal = Math.cos(angle) * Math.exp(realPart * angle / (2 * Math.PI));
+            double sinVal = Math.sin(angle) * Math.exp(realPart * angle / (2 * Math.PI));
+
+            g2.setFont(new Font("Monospaced", Font.BOLD, 13));
+            g2.setColor(new Color(100, 200, 255));
+            g2.drawString(String.format("cos(%.2f) = %.4f", angle, Math.cos(angle)), 20, h - 80);
+            g2.setColor(new Color(100, 255, 100));
+            g2.drawString(String.format("sin(%.2f) = %.4f", angle, Math.sin(angle)), 20, h - 60);
+            g2.setColor(new Color(255, 200, 100));
+            g2.drawString(String.format("x = %.2f rad = %.1f deg", angle, Math.toDegrees(angle)), 20, h - 40);
+
+            if (Math.abs(realPart) > 0.01) {
+                g2.setColor(new Color(255, 150, 255));
+                g2.drawString(String.format("e^(%.1f) * e^(i*%.2f) = %.4f + %.4fi",
+                    realPart * angle / (2 * Math.PI), angle, cosVal, sinVal), 20, h - 20);
+            } else {
+                g2.setColor(traceColor);
+                g2.drawString(String.format("e^(i*%.2f) = %.4f + %.4fi", angle, Math.cos(angle), Math.sin(angle)), 20, h - 20);
+            }
+
+            // cos/sin formulas from e
+            g2.setFont(new Font("Monospaced", Font.PLAIN, 11));
+            g2.setColor(withAlpha(TEXT_COLOR, 150));
+            g2.drawString("cos(x) = (e^(ix) + e^(-ix)) / 2", 20, 55);
+            g2.drawString("sin(x) = (e^(ix) - e^(-ix)) / (2i)", 20, 70);
+        }
+    }
+
+    // =====================================================================
+    // TAB 8: Differential Equations & Laplace Transform
+    // =====================================================================
+
+    /**
+     * Panel visualizing the differential equation y' = ky and
+     * the Laplace transform with e^(-st) as kernel.
+     */
+    static class DiffEqLaplacePanel extends JPanel {
+        private double kValue = 1.0;
+        private double sValue = 1.0;
+        private int animFrame = 0;
+        private javax.swing.Timer animTimer;
+
+        /**
+         * Constructs the DiffEq and Laplace panel.
+         */
+        public DiffEqLaplacePanel() {
+            setLayout(new BorderLayout());
+            setBackground(PANEL_BG);
+
+            JPanel sidebar = new JPanel();
+            sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
+            sidebar.setBackground(new Color(25, 25, 45));
+            sidebar.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+            sidebar.setPreferredSize(new Dimension(260, 0));
+
+            JLabel title = new JLabel("DiffEq & Laplace");
+            title.setForeground(ACCENT);
+            title.setFont(new Font("SansSerif", Font.BOLD, 16));
+            title.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(title);
+            sidebar.add(Box.createVerticalStrut(8));
+
+            JTextArea info = new JTextArea(
+                "Differential equation:\n" +
+                "  y' = k*y\n" +
+                "  Solution: y = C*e^(kx)\n\n" +
+                "k > 0: exponential growth\n" +
+                "k < 0: exponential decay\n" +
+                "k = 0: constant\n\n" +
+                "Laplace Transform:\n" +
+                "  L{f(t)} = integral\n" +
+                "    f(t)*e^(-st) dt\n\n" +
+                "The kernel e^(-st) maps\n" +
+                "time functions to the\n" +
+                "s-domain.\n\n" +
+                "Key transforms:\n" +
+                "  L{1} = 1/s\n" +
+                "  L{e^(at)} = 1/(s-a)\n" +
+                "  L{cos(wt)} = s/(s^2+w^2)\n" +
+                "  L{sin(wt)} = w/(s^2+w^2)"
+            );
+            info.setEditable(false);
+            info.setBackground(new Color(35, 35, 60));
+            info.setForeground(new Color(200, 200, 220));
+            info.setFont(new Font("Monospaced", Font.PLAIN, 10));
+            info.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+            info.setMaximumSize(new Dimension(240, 350));
+            info.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(info);
+            sidebar.add(Box.createVerticalStrut(10));
+
+            // k slider
+            JLabel kLabel = new JLabel("k (growth/decay rate)");
+            kLabel.setForeground(Color.WHITE);
+            kLabel.setFont(new Font("SansSerif", Font.BOLD, 11));
+            kLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(kLabel);
+            JSlider kSlider = new JSlider(-30, 30, 10);
+            kSlider.setBackground(new Color(25, 25, 45));
+            kSlider.setForeground(Color.WHITE);
+            kSlider.setMaximumSize(new Dimension(240, 28));
+            kSlider.setAlignmentX(Component.LEFT_ALIGNMENT);
+            kSlider.addChangeListener(e -> { kValue = kSlider.getValue() / 10.0; repaint(); });
+            sidebar.add(kSlider);
+            sidebar.add(Box.createVerticalStrut(8));
+
+            // s slider
+            JLabel sLabel = new JLabel("s (Laplace parameter)");
+            sLabel.setForeground(Color.WHITE);
+            sLabel.setFont(new Font("SansSerif", Font.BOLD, 11));
+            sLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(sLabel);
+            JSlider sSlider = new JSlider(1, 50, 10);
+            sSlider.setBackground(new Color(25, 25, 45));
+            sSlider.setForeground(Color.WHITE);
+            sSlider.setMaximumSize(new Dimension(240, 28));
+            sSlider.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sSlider.addChangeListener(e -> { sValue = sSlider.getValue() / 10.0; repaint(); });
+            sidebar.add(sSlider);
+
+            sidebar.add(Box.createVerticalGlue());
+            add(sidebar, BorderLayout.EAST);
+
+            animTimer = new javax.swing.Timer(16, e -> { animFrame++; repaint(); });
+            animTimer.start();
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g;
+            setupRendering(g2);
+
+            int w = getWidth() - 260;
+            int h = getHeight();
+            g2.setColor(PANEL_BG);
+            g2.fillRect(0, 0, w, h);
+
+            int halfW = w / 2;
+            int halfH = h / 2;
+            int margin = 40;
+
+            // --- Top: y' = ky solutions ---
+            g2.setFont(new Font("SansSerif", Font.BOLD, 16));
+            drawGlowString(g2, String.format("y' = %.1fy  =>  y(t) = e^(%.1ft)", kValue, kValue), 20, 28, ACCENT);
+
+            int plotW = w - 2 * margin;
+            int plotH = halfH - margin - 30;
+            int ox = margin, oy = 40;
+
+            g2.setColor(colorWithAlpha(20, 20, 40, 200));
+            g2.fillRoundRect(ox - 5, oy - 5, plotW + 10, plotH + 10, 8, 8);
+
+            // Grid and axes
+            double tMin = 0, tMax = 5, yMin2 = -2, yMax2 = 5;
+            g2.setColor(withAlpha(TEXT_COLOR, 15));
+            for (int i = (int)tMin; i <= (int)tMax; i++) {
+                int px = ox + (int)((i - tMin) / (tMax - tMin) * plotW);
+                g2.drawLine(px, oy, px, oy + plotH);
+            }
+            g2.setColor(withAlpha(TEXT_COLOR, 60));
+            int zeroY = oy + (int)((yMax2) / (yMax2 - yMin2) * plotH);
+            g2.drawLine(ox, zeroY, ox + plotW, zeroY);
+            g2.drawLine(ox, oy, ox, oy + plotH);
+
+            // Axis labels
+            g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
+            g2.setColor(withAlpha(TEXT_COLOR, 120));
+            g2.drawString("t", ox + plotW - 10, zeroY + 15);
+
+            // Plot multiple k values for context
+            Shape oldClip = g2.getClip();
+            g2.setClip(ox, oy, plotW, plotH);
+            double[] kValues = {-2, -1, -0.5, 0, 0.5, 1, 2};
+            for (double k : kValues) {
+                boolean isCurrent = Math.abs(k - kValue) < 0.05;
+                float hue = (float)((k + 3) / 6.0);
+                Color c = Color.getHSBColor(hue, isCurrent ? 0.9f : 0.4f, isCurrent ? 1.0f : 0.5f);
+                g2.setColor(isCurrent ? c : withAlpha(c, 60));
+                g2.setStroke(new BasicStroke(isCurrent ? 3f : 1f));
+                GeneralPath path = new GeneralPath();
+                boolean started = false;
+                for (int s = 0; s <= plotW; s++) {
+                    double t = tMin + (tMax - tMin) * s / plotW;
+                    double y = Math.exp(k * t);
+                    if (Math.abs(y) > 50) { started = false; continue; }
+                    float fx = ox + s;
+                    float fy = (float)(oy + (yMax2 - y) / (yMax2 - yMin2) * plotH);
+                    if (!started) { path.moveTo(fx, fy); started = true; }
+                    else path.lineTo(fx, fy);
+                }
+                g2.draw(path);
+                if (isCurrent) {
+                    g2.setColor(withAlpha(c, 30));
+                    g2.setStroke(new BasicStroke(8f));
+                    g2.draw(path);
+                }
+            }
+
+            // Current k value curve
+            float curHue = (float)((kValue + 3) / 6.0);
+            Color curColor = Color.getHSBColor(curHue, 0.9f, 1.0f);
+            g2.setClip(oldClip);
+            g2.setStroke(new BasicStroke(1));
+
+            // Labels
+            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+            g2.setColor(curColor);
+            String behavior = kValue > 0 ? "Growth" : kValue < 0 ? "Decay" : "Constant";
+            g2.drawString(String.format("k = %.1f (%s)", kValue, behavior), ox + 10, oy + plotH + 20);
+
+            // --- Bottom: Laplace kernel e^(-st) ---
+            int ly = halfH + 20;
+            g2.setFont(new Font("SansSerif", Font.BOLD, 16));
+            drawGlowString(g2, String.format("Laplace kernel: e^(-%.1ft)", sValue), 20, ly, ACCENT);
+
+            int lPlotY = ly + 15;
+            int lPlotH = halfH - 60;
+
+            g2.setColor(colorWithAlpha(20, 20, 40, 200));
+            g2.fillRoundRect(ox - 5, lPlotY - 5, plotW + 10, lPlotH + 10, 8, 8);
+
+            // Grid
+            g2.setColor(withAlpha(TEXT_COLOR, 15));
+            for (int i = 0; i <= 5; i++) {
+                int px = ox + (int)(i / 5.0 * plotW);
+                g2.drawLine(px, lPlotY, px, lPlotY + lPlotH);
+            }
+            int lZeroY = lPlotY + (int)(1.0 / 1.5 * lPlotH);
+            g2.setColor(withAlpha(TEXT_COLOR, 60));
+            g2.drawLine(ox, lZeroY, ox + plotW, lZeroY);
+            g2.drawLine(ox, lPlotY, ox, lPlotY + lPlotH);
+
+            // Plot e^(-st) for current s
+            oldClip = g2.getClip();
+            g2.setClip(ox, lPlotY, plotW, lPlotH);
+            GeneralPath kernel = new GeneralPath();
+            boolean started = false;
+            for (int px = 0; px <= plotW; px++) {
+                double t = 5.0 * px / plotW;
+                double y = Math.exp(-sValue * t);
+                float fx = ox + px;
+                float fy = (float)(lPlotY + (1.0 - y) / 1.5 * lPlotH);
+                if (!started) { kernel.moveTo(fx, fy); started = true; }
+                else kernel.lineTo(fx, fy);
+            }
+            Color kernelColor = new Color(255, 150, 50);
+            g2.setColor(withAlpha(kernelColor, 30));
+            g2.setStroke(new BasicStroke(8f));
+            g2.draw(kernel);
+            g2.setColor(kernelColor);
+            g2.setStroke(new BasicStroke(3f));
+            g2.draw(kernel);
+
+            // Also show f(t)=1 * e^(-st) shaded area
+            GeneralPath area = new GeneralPath();
+            area.moveTo(ox, lZeroY);
+            for (int px = 0; px <= plotW; px++) {
+                double t = 5.0 * px / plotW;
+                double y = Math.exp(-sValue * t);
+                area.lineTo(ox + px, (float)(lPlotY + (1.0 - y) / 1.5 * lPlotH));
+            }
+            area.lineTo(ox + plotW, lZeroY);
+            area.closePath();
+            g2.setColor(withAlpha(kernelColor, 15));
+            g2.fill(area);
+            g2.setClip(oldClip);
+            g2.setStroke(new BasicStroke(1));
+
+            // Info
+            g2.setFont(new Font("Monospaced", Font.BOLD, 12));
+            g2.setColor(kernelColor);
+            g2.drawString(String.format("s = %.1f  =>  L{1} = 1/s = %.4f", sValue, 1.0 / sValue),
+                ox + 10, lPlotY + lPlotH + 20);
+            g2.setColor(TEXT_COLOR);
+            g2.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            g2.drawString("Shaded area = integral = Laplace transform value", ox + 10, lPlotY + lPlotH + 38);
+        }
+    }
+
+    // =====================================================================
+    // TAB 9: Fibonacci Spiral & Convergence
     // =====================================================================
 
     /**
@@ -3142,7 +4304,569 @@ public class MathExplorer extends JFrame {
     }
 
     // =====================================================================
-    // TAB 10: Overview
+    // TAB: Spacetime (Minkowski diagram, Lorentz transformation)
+    // =====================================================================
+
+    /**
+     * Panel visualizing special relativity: Minkowski spacetime diagram,
+     * Lorentz boost as matrix transformation, time dilation, length contraction,
+     * and light cones. Shows the underlying math (hyperbolic functions, matrices).
+     */
+    static class SpacetimePanel extends JPanel {
+        private double velocity = 0.0; // v/c, range -0.99 to 0.99
+        private int animFrame = 0;
+        private javax.swing.Timer animTimer;
+
+        /**
+         * Constructs the Spacetime panel.
+         */
+        public SpacetimePanel() {
+            setLayout(new BorderLayout());
+            setBackground(PANEL_BG);
+
+            JPanel sidebar = new JPanel();
+            sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
+            sidebar.setBackground(new Color(25, 25, 45));
+            sidebar.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+            sidebar.setPreferredSize(new Dimension(270, 0));
+
+            JLabel title = new JLabel("Spacetime");
+            title.setForeground(ACCENT);
+            title.setFont(new Font("SansSerif", Font.BOLD, 16));
+            title.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(title);
+            sidebar.add(Box.createVerticalStrut(8));
+
+            JTextArea info = new JTextArea(
+                "Minkowski Spacetime:\n\n" +
+                "The Lorentz boost is a\n" +
+                "matrix transformation:\n\n" +
+                "| ct' |   | g  -gb | | ct |\n" +
+                "| x'  | = | -gb  g | | x  |\n\n" +
+                "where g = 1/sqrt(1-b^2)\n" +
+                "      b = v/c\n\n" +
+                "This uses cosh and sinh:\n" +
+                "  g = cosh(rapidity)\n" +
+                "  gb = sinh(rapidity)\n\n" +
+                "cosh/sinh relate to e^x:\n" +
+                "  cosh(r) = (e^r+e^-r)/2\n" +
+                "  sinh(r) = (e^r-e^-r)/2\n\n" +
+                "Light cone: x = +/- ct\n" +
+                "(45 degree lines)"
+            );
+            info.setEditable(false);
+            info.setBackground(new Color(35, 35, 60));
+            info.setForeground(new Color(200, 200, 220));
+            info.setFont(new Font("Monospaced", Font.PLAIN, 10));
+            info.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+            info.setMaximumSize(new Dimension(250, 320));
+            info.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(info);
+            sidebar.add(Box.createVerticalStrut(12));
+
+            JLabel vLabel = new JLabel("Velocity v/c");
+            vLabel.setForeground(Color.WHITE);
+            vLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+            vLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(vLabel);
+            sidebar.add(Box.createVerticalStrut(3));
+
+            JSlider vSlider = new JSlider(-99, 99, 0);
+            vSlider.setBackground(new Color(25, 25, 45));
+            vSlider.setForeground(Color.WHITE);
+            vSlider.setMaximumSize(new Dimension(250, 30));
+            vSlider.setAlignmentX(Component.LEFT_ALIGNMENT);
+            vSlider.addChangeListener(e -> { velocity = vSlider.getValue() / 100.0; repaint(); });
+            sidebar.add(vSlider);
+
+            sidebar.add(Box.createVerticalGlue());
+            add(sidebar, BorderLayout.EAST);
+
+            animTimer = new javax.swing.Timer(16, e -> { animFrame++; repaint(); });
+            animTimer.start();
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g;
+            setupRendering(g2);
+
+            int w = getWidth() - 270;
+            int h = getHeight();
+            g2.setColor(PANEL_BG);
+            g2.fillRect(0, 0, w, h);
+
+            double beta = velocity;
+            double gamma = 1.0 / Math.sqrt(1.0 - beta * beta);
+            double rapidity = 0.5 * Math.log((1 + Math.abs(beta)) / (1 - Math.abs(beta)));
+            if (beta < 0) rapidity = -rapidity;
+
+            // --- Left: Minkowski Diagram ---
+            int cx = w / 3;
+            int cy = h / 2;
+            double scale = Math.min(w / 3.0, h / 2.0) * 0.7;
+
+            g2.setFont(new Font("SansSerif", Font.BOLD, 16));
+            drawGlowString(g2, "Minkowski Diagram", 20, 28, ACCENT);
+
+            // Grid
+            g2.setColor(withAlpha(TEXT_COLOR, 15));
+            for (int i = -5; i <= 5; i++) {
+                g2.drawLine(cx + (int)(i * scale / 3), 50, cx + (int)(i * scale / 3), h - 10);
+                g2.drawLine(20, cy - (int)(i * scale / 3), cx * 2, cy - (int)(i * scale / 3));
+            }
+
+            // Rest frame axes
+            g2.setColor(withAlpha(TEXT_COLOR, 100));
+            g2.setStroke(new BasicStroke(2));
+            g2.drawLine(20, cy, cx * 2, cy); // x axis
+            g2.drawLine(cx, 50, cx, h - 10); // ct axis
+            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+            g2.setColor(TEXT_COLOR);
+            g2.drawString("x", cx * 2 - 15, cy - 8);
+            g2.drawString("ct", cx + 8, 65);
+
+            // Light cone (45 degree lines)
+            g2.setColor(new Color(255, 255, 100, 80));
+            g2.setStroke(new BasicStroke(2, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{6, 4}, 0));
+            int lcLen = (int)(scale * 1.5);
+            g2.drawLine(cx - lcLen, cy + lcLen, cx + lcLen, cy - lcLen); // future right
+            g2.drawLine(cx + lcLen, cy + lcLen, cx - lcLen, cy - lcLen); // future left
+
+            // Light cone fill
+            g2.setColor(new Color(255, 255, 100, 10));
+            int[] xPts = {cx, cx + lcLen, cx, cx - lcLen};
+            int[] yPts = {cy, cy - lcLen, cy - 2 * lcLen, cy - lcLen};
+            // Future cone
+            g2.fillPolygon(new int[]{cx, cx + lcLen, cx - lcLen}, new int[]{cy, cy - lcLen, cy - lcLen}, 3);
+            // Past cone
+            g2.fillPolygon(new int[]{cx, cx + lcLen, cx - lcLen}, new int[]{cy, cy + lcLen, cy + lcLen}, 3);
+
+            g2.setFont(new Font("SansSerif", Font.ITALIC, 10));
+            g2.setColor(new Color(255, 255, 100, 150));
+            g2.drawString("Future", cx - 18, cy - lcLen + 15);
+            g2.drawString("Past", cx - 12, cy + lcLen - 8);
+
+            // Boosted axes (ct' and x')
+            if (Math.abs(beta) > 0.01) {
+                g2.setStroke(new BasicStroke(2.5f));
+                // ct' axis tilts toward light cone
+                double ctAngle = Math.atan(beta); // angle from vertical
+                int axLen = (int)(scale * 1.3);
+                // ct' axis
+                g2.setColor(new Color(100, 200, 255, 180));
+                int ct1x = cx + (int)(axLen * Math.sin(ctAngle));
+                int ct1y = cy - (int)(axLen * Math.cos(ctAngle));
+                int ct2x = cx - (int)(axLen * Math.sin(ctAngle));
+                int ct2y = cy + (int)(axLen * Math.cos(ctAngle));
+                g2.drawLine(ct2x, ct2y, ct1x, ct1y);
+                g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+                g2.drawString("ct'", ct1x + 5, ct1y + 5);
+
+                // x' axis
+                g2.setColor(new Color(255, 100, 100, 180));
+                int x1x = cx + (int)(axLen * Math.cos(ctAngle));
+                int x1y = cy - (int)(axLen * Math.sin(ctAngle));
+                int x2x = cx - (int)(axLen * Math.cos(ctAngle));
+                int x2y = cy + (int)(axLen * Math.sin(ctAngle));
+                g2.drawLine(x2x, x2y, x1x, x1y);
+                g2.drawString("x'", x1x + 5, x1y - 5);
+            }
+            g2.setStroke(new BasicStroke(1));
+
+            // Worldline of moving observer
+            g2.setColor(new Color(100, 255, 100, 200));
+            g2.setStroke(new BasicStroke(3));
+            int wlLen = (int)(scale * 1.2);
+            int wlx1 = cx - (int)(beta * wlLen);
+            int wly1 = cy + wlLen;
+            int wlx2 = cx + (int)(beta * wlLen);
+            int wly2 = cy - wlLen;
+            g2.drawLine(wlx1, wly1, wlx2, wly2);
+            g2.setFont(new Font("SansSerif", Font.ITALIC, 10));
+            g2.drawString("worldline", wlx2 + 5, wly2 + 15);
+            g2.setStroke(new BasicStroke(1));
+
+            // --- Right: Math formulas and values ---
+            int rx = w * 2 / 3 - 20;
+            int ry = 50;
+            int rw = w / 3 + 10;
+
+            // Lorentz matrix
+            g2.setColor(colorWithAlpha(25, 25, 50, 220));
+            g2.fillRoundRect(rx, ry, rw, 180, 8, 8);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 14));
+            drawGlowString(g2, "Lorentz Boost Matrix", rx + 10, ry + 22, ACCENT);
+
+            g2.setFont(new Font("Monospaced", Font.BOLD, 13));
+            g2.setColor(new Color(100, 200, 255));
+            g2.drawString(String.format("| %6.3f  %7.3f |", gamma, -gamma * beta), rx + 15, ry + 50);
+            g2.drawString(String.format("| %6.3f  %7.3f |", -gamma * beta, gamma), rx + 15, ry + 70);
+
+            g2.setFont(new Font("Monospaced", Font.PLAIN, 11));
+            g2.setColor(new Color(255, 200, 100));
+            g2.drawString(String.format("v/c = %.2f", beta), rx + 15, ry + 100);
+            g2.drawString(String.format("gamma = %.4f", gamma), rx + 15, ry + 118);
+            g2.drawString(String.format("rapidity = %.4f", rapidity), rx + 15, ry + 136);
+
+            g2.setColor(new Color(200, 200, 220));
+            g2.drawString(String.format("cosh(r) = %.4f", Math.cosh(rapidity)), rx + 15, ry + 158);
+            g2.drawString(String.format("sinh(r) = %.4f", Math.sinh(rapidity)), rx + 15, ry + 176);
+
+            // Time dilation and length contraction
+            int dy = ry + 200;
+            g2.setColor(colorWithAlpha(25, 25, 50, 220));
+            g2.fillRoundRect(rx, dy, rw, 160, 8, 8);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 14));
+            drawGlowString(g2, "Relativistic Effects", rx + 10, dy + 22, ACCENT);
+
+            g2.setFont(new Font("Monospaced", Font.BOLD, 12));
+            g2.setColor(new Color(100, 255, 100));
+            g2.drawString("Time dilation:", rx + 15, dy + 48);
+            g2.setColor(TEXT_COLOR);
+            g2.drawString(String.format("  dt' = g*dt = %.3f * dt", gamma), rx + 15, dy + 66);
+            g2.drawString("  1 sec -> " + String.format("%.3f sec", gamma), rx + 15, dy + 84);
+
+            g2.setColor(new Color(255, 100, 100));
+            g2.drawString("Length contraction:", rx + 15, dy + 108);
+            g2.setColor(TEXT_COLOR);
+            g2.drawString(String.format("  L' = L/g = L * %.3f", 1.0 / gamma), rx + 15, dy + 126);
+            g2.drawString("  1 m -> " + String.format("%.3f m", 1.0 / gamma), rx + 15, dy + 144);
+
+            // Hyperbolic connection to e^x
+            int ey = dy + 180;
+            g2.setColor(colorWithAlpha(25, 25, 50, 220));
+            g2.fillRoundRect(rx, ey, rw, 120, 8, 8);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 14));
+            drawGlowString(g2, "Connection to e^x", rx + 10, ey + 22, ACCENT);
+
+            g2.setFont(new Font("Monospaced", Font.PLAIN, 11));
+            g2.setColor(new Color(200, 200, 220));
+            g2.drawString("cosh(r) = (e^r + e^-r) / 2", rx + 15, ey + 48);
+            g2.drawString("sinh(r) = (e^r - e^-r) / 2", rx + 15, ey + 66);
+            g2.drawString(String.format("e^r  = %.4f", Math.exp(rapidity)), rx + 15, ey + 90);
+            g2.drawString(String.format("e^-r = %.4f", Math.exp(-rapidity)), rx + 15, ey + 108);
+
+            // Bottom info
+            g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
+            g2.setColor(withAlpha(TEXT_COLOR, 150));
+            g2.drawString("The Lorentz boost is a hyperbolic rotation - just like e^x connects to cosh and sinh.", 20, h - 15);
+        }
+    }
+
+    // =====================================================================
+    // TAB: Redshift (Doppler effect, wavelength shift)
+    // =====================================================================
+
+    /**
+     * Panel visualizing relativistic Doppler effect / redshift.
+     * Shows how velocity affects photon wavelength and color,
+     * with the underlying math (Doppler formula, z parameter).
+     */
+    static class RedshiftPanel extends JPanel {
+        private double velocity = 0.0; // v/c
+        private double emitWavelength = 500; // nm (green)
+        private int animFrame = 0;
+        private javax.swing.Timer animTimer;
+
+        /**
+         * Constructs the Redshift panel.
+         */
+        public RedshiftPanel() {
+            setLayout(new BorderLayout());
+            setBackground(PANEL_BG);
+
+            JPanel sidebar = new JPanel();
+            sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
+            sidebar.setBackground(new Color(25, 25, 45));
+            sidebar.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+            sidebar.setPreferredSize(new Dimension(260, 0));
+
+            JLabel title = new JLabel("Redshift");
+            title.setForeground(ACCENT);
+            title.setFont(new Font("SansSerif", Font.BOLD, 16));
+            title.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(title);
+            sidebar.add(Box.createVerticalStrut(8));
+
+            JTextArea info = new JTextArea(
+                "Relativistic Doppler effect:\n\n" +
+                "When a light source moves\n" +
+                "away, its wavelength gets\n" +
+                "stretched (redshift).\n" +
+                "Moving toward: blueshift.\n\n" +
+                "Formula:\n" +
+                "l_obs = l_emit *\n" +
+                "  sqrt((1+v/c) / (1-v/c))\n\n" +
+                "Redshift parameter:\n" +
+                "z = (l_obs - l_emit) / l_emit\n" +
+                "z = sqrt((1+b)/(1-b)) - 1\n\n" +
+                "v > 0: moving away (red)\n" +
+                "v < 0: moving toward (blue)"
+            );
+            info.setEditable(false);
+            info.setBackground(new Color(35, 35, 60));
+            info.setForeground(new Color(200, 200, 220));
+            info.setFont(new Font("Monospaced", Font.PLAIN, 10));
+            info.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+            info.setMaximumSize(new Dimension(240, 280));
+            info.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(info);
+            sidebar.add(Box.createVerticalStrut(12));
+
+            // Velocity slider
+            JLabel vLabel = new JLabel("Velocity v/c");
+            vLabel.setForeground(Color.WHITE);
+            vLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+            vLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(vLabel);
+            JSlider vSlider = new JSlider(-95, 95, 0);
+            vSlider.setBackground(new Color(25, 25, 45));
+            vSlider.setForeground(Color.WHITE);
+            vSlider.setMaximumSize(new Dimension(240, 30));
+            vSlider.setAlignmentX(Component.LEFT_ALIGNMENT);
+            vSlider.addChangeListener(e -> { velocity = vSlider.getValue() / 100.0; repaint(); });
+            sidebar.add(vSlider);
+            sidebar.add(Box.createVerticalStrut(10));
+
+            // Emitted wavelength slider
+            JLabel wLabel = new JLabel("Emitted wavelength (nm)");
+            wLabel.setForeground(Color.WHITE);
+            wLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+            wLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            sidebar.add(wLabel);
+            JSlider wSlider = new JSlider(380, 700, 500);
+            wSlider.setBackground(new Color(25, 25, 45));
+            wSlider.setForeground(Color.WHITE);
+            wSlider.setMaximumSize(new Dimension(240, 30));
+            wSlider.setAlignmentX(Component.LEFT_ALIGNMENT);
+            wSlider.addChangeListener(e -> { emitWavelength = wSlider.getValue(); repaint(); });
+            sidebar.add(wSlider);
+
+            sidebar.add(Box.createVerticalGlue());
+            add(sidebar, BorderLayout.EAST);
+
+            animTimer = new javax.swing.Timer(16, e -> { animFrame++; repaint(); });
+            animTimer.start();
+        }
+
+        /**
+         * Converts wavelength in nm to approximate RGB color.
+         *
+         * @param wl wavelength in nanometers
+         * @return the visible color
+         */
+        private Color wlToColor(double wl) {
+            double r = 0, g = 0, b = 0;
+            if (wl >= 380 && wl < 440) { r = -(wl - 440) / 60.0; b = 1; }
+            else if (wl >= 440 && wl < 490) { g = (wl - 440) / 50.0; b = 1; }
+            else if (wl >= 490 && wl < 510) { g = 1; b = -(wl - 510) / 20.0; }
+            else if (wl >= 510 && wl < 580) { r = (wl - 510) / 70.0; g = 1; }
+            else if (wl >= 580 && wl < 645) { r = 1; g = -(wl - 645) / 65.0; }
+            else if (wl >= 645 && wl <= 780) { r = 1; }
+            else if (wl < 380) { r = 0.4; b = 1; }
+            else { r = 0.7; }
+            return new Color(clampAlpha((int)(r * 255)), clampAlpha((int)(g * 255)), clampAlpha((int)(b * 255)));
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g;
+            setupRendering(g2);
+
+            int w = getWidth() - 260;
+            int h = getHeight();
+            g2.setColor(PANEL_BG);
+            g2.fillRect(0, 0, w, h);
+
+            double beta = velocity;
+            double dopplerFactor = Math.sqrt((1 + beta) / (1 - beta));
+            double obsWavelength = emitWavelength * dopplerFactor;
+            double z = dopplerFactor - 1;
+
+            Color emitColor = wlToColor(emitWavelength);
+            Color obsColor = wlToColor(obsWavelength);
+
+            g2.setFont(new Font("SansSerif", Font.BOLD, 18));
+            drawGlowString(g2, "Relativistic Doppler Effect / Redshift", 20, 28, ACCENT);
+
+            // --- Top: Source and Observer with wave ---
+            int waveY = 120;
+            int srcX = 80;
+            int obsX = w - 80;
+            int waveW = obsX - srcX;
+
+            // Source
+            g2.setColor(emitColor);
+            drawGlowCircle(g2, srcX, waveY, 20, emitColor);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 11));
+            g2.setColor(emitColor);
+            g2.drawString("Source", srcX - 20, waveY - 30);
+
+            // Velocity arrow
+            if (Math.abs(beta) > 0.01) {
+                int arrowLen = (int)(beta * 60);
+                g2.setColor(new Color(255, 255, 100));
+                g2.setStroke(new BasicStroke(2));
+                g2.drawLine(srcX, waveY + 30, srcX + arrowLen, waveY + 30);
+                g2.fillPolygon(
+                    new int[]{srcX + arrowLen + (arrowLen > 0 ? 8 : -8), srcX + arrowLen, srcX + arrowLen},
+                    new int[]{waveY + 30, waveY + 25, waveY + 35}, 3);
+                g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
+                g2.drawString(String.format("v = %.2fc", beta), srcX + arrowLen + (arrowLen > 0 ? 12 : -50), waveY + 34);
+                g2.setStroke(new BasicStroke(1));
+            }
+
+            // Observer
+            g2.setColor(obsColor);
+            drawGlowCircle(g2, obsX, waveY, 15, obsColor);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 11));
+            g2.drawString("Observer", obsX - 25, waveY - 25);
+
+            // Wave between source and observer
+            double emitFreq = 0.03 + (700 - emitWavelength) * 0.0001;
+            double obsFreq = emitFreq / dopplerFactor;
+            g2.setStroke(new BasicStroke(2.5f));
+            // Emitted wave (left half)
+            GeneralPath emitWave = new GeneralPath();
+            for (int px = 0; px < waveW / 2; px++) {
+                double x = px + animFrame * 2;
+                double y = 25 * Math.sin(x * emitFreq);
+                float fx = srcX + 25 + px;
+                float fy = (float)(waveY + y);
+                if (px == 0) emitWave.moveTo(fx, fy);
+                else emitWave.lineTo(fx, fy);
+            }
+            g2.setColor(withAlpha(emitColor, 30));
+            g2.setStroke(new BasicStroke(8));
+            g2.draw(emitWave);
+            g2.setColor(emitColor);
+            g2.setStroke(new BasicStroke(2.5f));
+            g2.draw(emitWave);
+
+            // Observed wave (right half)
+            GeneralPath obsWave = new GeneralPath();
+            for (int px = 0; px < waveW / 2; px++) {
+                double x = px + animFrame * 2;
+                double y = 25 * Math.sin(x * obsFreq);
+                float fx = srcX + 25 + waveW / 2 + px;
+                float fy = (float)(waveY + y);
+                if (px == 0) obsWave.moveTo(fx, fy);
+                else obsWave.lineTo(fx, fy);
+            }
+            g2.setColor(withAlpha(obsColor, 30));
+            g2.setStroke(new BasicStroke(8));
+            g2.draw(obsWave);
+            g2.setColor(obsColor);
+            g2.setStroke(new BasicStroke(2.5f));
+            g2.draw(obsWave);
+            g2.setStroke(new BasicStroke(1));
+
+            // --- Middle: Color comparison and values ---
+            int midY = 200;
+            // Emitted color bar
+            g2.setFont(new Font("SansSerif", Font.BOLD, 13));
+            g2.setColor(TEXT_COLOR);
+            g2.drawString("Emitted:", 30, midY + 15);
+            g2.setColor(emitColor);
+            g2.fillRoundRect(120, midY, 200, 25, 5, 5);
+            g2.setColor(Color.WHITE);
+            g2.drawString(String.format("%.0f nm", emitWavelength), 140, midY + 17);
+
+            // Observed color bar
+            g2.setColor(TEXT_COLOR);
+            g2.drawString("Observed:", 30, midY + 55);
+            g2.setColor(obsColor);
+            g2.fillRoundRect(120, midY + 40, 200, 25, 5, 5);
+            g2.setColor(Color.WHITE);
+            g2.drawString(String.format("%.0f nm", obsWavelength), 140, midY + 57);
+
+            // Math values
+            int mx = 360;
+            g2.setFont(new Font("Monospaced", Font.BOLD, 13));
+            g2.setColor(new Color(255, 200, 100));
+            g2.drawString(String.format("Doppler factor = %.4f", dopplerFactor), mx, midY + 15);
+            g2.setColor(z > 0 ? new Color(255, 100, 100) : new Color(100, 100, 255));
+            g2.drawString(String.format("z = %.4f  (%s)", z, z > 0 ? "redshift" : z < 0 ? "blueshift" : "none"), mx, midY + 38);
+            g2.setColor(TEXT_COLOR);
+            g2.drawString(String.format("v/c = %.3f", beta), mx, midY + 58);
+
+            // --- Formula display ---
+            int fy = midY + 90;
+            g2.setColor(colorWithAlpha(25, 25, 50, 220));
+            g2.fillRoundRect(30, fy, w - 60, 80, 8, 8);
+            g2.setFont(new Font("Monospaced", Font.BOLD, 14));
+            g2.setColor(new Color(100, 200, 255));
+            g2.drawString("Relativistic Doppler Formula:", 50, fy + 22);
+            g2.setColor(new Color(255, 200, 100));
+            g2.drawString("l_obs = l_emit * sqrt( (1 + v/c) / (1 - v/c) )", 50, fy + 48);
+            g2.setFont(new Font("Monospaced", Font.PLAIN, 12));
+            g2.setColor(TEXT_COLOR);
+            g2.drawString(String.format("      = %.0f   * sqrt( (1 + %.2f) / (1 - %.2f) ) = %.1f nm",
+                emitWavelength, beta, beta, obsWavelength), 50, fy + 68);
+
+            // --- Bottom: Full spectrum with shift visualization ---
+            int specY = fy + 100;
+            g2.setFont(new Font("SansSerif", Font.BOLD, 14));
+            drawGlowString(g2, "Visible Spectrum", 30, specY, ACCENT);
+
+            int specX = 30, specW = w - 60, specH = 40;
+            specY += 10;
+            // Draw spectrum
+            for (int px = 0; px < specW; px++) {
+                double wl = 380 + (px / (double) specW) * 400;
+                g2.setColor(wlToColor(wl));
+                g2.drawLine(specX + px, specY, specX + px, specY + specH);
+            }
+
+            // Emitted marker
+            if (emitWavelength >= 380 && emitWavelength <= 780) {
+                int emitPx = specX + (int)((emitWavelength - 380) / 400 * specW);
+                g2.setColor(Color.WHITE);
+                g2.setStroke(new BasicStroke(2));
+                g2.drawLine(emitPx, specY - 5, emitPx, specY + specH + 5);
+                g2.setFont(new Font("SansSerif", Font.BOLD, 10));
+                g2.drawString("emit", emitPx - 12, specY - 8);
+            }
+
+            // Observed marker
+            if (obsWavelength >= 380 && obsWavelength <= 780) {
+                int obsPx = specX + (int)((obsWavelength - 380) / 400 * specW);
+                g2.setColor(obsColor);
+                g2.setStroke(new BasicStroke(2));
+                g2.drawLine(obsPx, specY - 5, obsPx, specY + specH + 5);
+                g2.setFont(new Font("SansSerif", Font.BOLD, 10));
+                g2.drawString("obs", obsPx - 10, specY + specH + 18);
+            }
+
+            // Arrow between markers
+            if (Math.abs(z) > 0.01) {
+                int fromPx = specX + (int)(Math.max(0, Math.min(1, (emitWavelength - 380) / 400.0)) * specW);
+                int toPx = specX + (int)(Math.max(0, Math.min(1, (obsWavelength - 380) / 400.0)) * specW);
+                g2.setColor(new Color(255, 255, 255, 150));
+                g2.setStroke(new BasicStroke(1.5f));
+                int arrowY = specY + specH + 25;
+                g2.drawLine(fromPx, arrowY, toPx, arrowY);
+                int dir = toPx > fromPx ? -1 : 1;
+                g2.fillPolygon(
+                    new int[]{toPx, toPx + dir * 8, toPx + dir * 8},
+                    new int[]{arrowY, arrowY - 4, arrowY + 4}, 3);
+                g2.setFont(new Font("SansSerif", Font.ITALIC, 10));
+                g2.drawString(z > 0 ? "redshift" : "blueshift", (fromPx + toPx) / 2 - 20, arrowY - 5);
+            }
+            g2.setStroke(new BasicStroke(1));
+
+            // Bottom note
+            g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
+            g2.setColor(withAlpha(TEXT_COLOR, 150));
+            g2.drawString("Redshift is how we measure the expansion speed of the universe.", 30, h - 15);
+        }
+    }
+
+    // =====================================================================
+    // TAB: Overview
     // =====================================================================
 
     /**
@@ -3155,26 +4879,35 @@ public class MathExplorer extends JFrame {
         private javax.swing.Timer animTimer;
         private int hoveredNode = -1;
 
-        /** Node definitions: name, x-fraction, y-fraction, connected tab index, color. */
+        /** Node definitions: name, x-fraction, y-fraction, connected tab index. */
         private static final String[] NODE_NAMES = {
-            "Fibonacci", "Matrix", "Eigenvalues", "Golden Ratio",
-            "Taylor Series", "Pi", "Dimensions", "Circle"
+            "Fibonacci", "Matrix", "Eigenvalues", "Matrix Exp",
+            "Taylor", "e^x Props", "Euler", "DiffEq/Laplace",
+            "Spiral", "Dimensions", "Circle/Pi", "Norms",
+            "Photon", "Spacetime", "Redshift"
         };
         private static final double[][] NODE_POS = {
-            {0.50, 0.18}, {0.25, 0.35}, {0.75, 0.35}, {0.50, 0.42},
-            {0.20, 0.62}, {0.80, 0.62}, {0.35, 0.80}, {0.65, 0.80}
+            {0.12, 0.15}, {0.32, 0.15}, {0.52, 0.15}, {0.72, 0.15},
+            {0.12, 0.40}, {0.32, 0.40}, {0.52, 0.40}, {0.72, 0.40},
+            {0.12, 0.65}, {0.32, 0.65}, {0.52, 0.65}, {0.72, 0.65},
+            {0.92, 0.15}, {0.92, 0.40}, {0.92, 0.65}
         };
-        private static final int[] NODE_TABS = {0, 0, 2, 2, 3, 6, 5, 6};
+        private static final int[] NODE_TABS = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
         private static final int[][] EDGES = {
-            {0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 4}, {2, 3},
-            {3, 7}, {4, 1}, {5, 7}, {6, 1}, {6, 0}, {0, 5},
-            {3, 5}, {2, 6}
+            {0, 1}, {1, 2}, {1, 3}, {3, 4}, {4, 5}, {5, 6},
+            {6, 7}, {0, 8}, {2, 5}, {0, 9}, {6, 10}, {4, 3},
+            {5, 7}, {10, 11}, {7, 12}, {2, 0}, {8, 10}, {6, 12},
+            {12, 14}, {13, 14}, {1, 13}, {5, 13}, {12, 13}
         };
         private static final String[] EDGE_LABELS = {
-            "generates", "has eigenvalues", "converges to", "decomposition",
-            "e^A expansion", "related by eigenvectors", "inscribed ratio",
-            "matrix series", "area = pi*r^2", "generalized", "sequence",
-            "Binet's formula", "phi and pi appear in nature", "extends to nD"
+            "generates", "decomposition", "e^A series", "Taylor approx",
+            "properties", "complex plane", "y'=ky solution",
+            "golden spiral", "phi eigenvalue", "0D-5D",
+            "e^(ix) on circle", "matrix series", "decay/growth",
+            "Lp unit shapes", "E=hf photon", "phi ratio",
+            "Fib squares", "wave equation",
+            "Doppler shift", "wavelength change", "Lorentz matrix",
+            "cosh/sinh from e^x", "E=hf energy"
         };
 
         /**
