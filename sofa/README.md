@@ -1,13 +1,12 @@
 # Funktionsplotter
 
-## Install
+## Requirements
 
-```bash
-pip install numpy matplotlib
-```
+- Java 8+
 
 ## Run
 
 ```bash
-python funktionsplotter.py
+javac Funktionsplotter.java
+java Funktionsplotter
 ```
