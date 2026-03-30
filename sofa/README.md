@@ -27,3 +27,9 @@ javac FibonacciGalaxy.java && java FibonacciGalaxy
 ```bash
 javac FibonacciTree.java && java FibonacciTree
 ```
+
+## Taylor Series - e^x
+
+```bash
+javac TaylorExponential.java && java TaylorExponential
+```
