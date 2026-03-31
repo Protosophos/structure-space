@@ -1,0 +1,629 @@
+%% ====================================================================
+\section{Numerical Methods}
+\label{sec:methods}
+%% ====================================================================
+
+\subsection{Computation of Partial Dirichlet Series}
+\label{sec:dirichlet}
+
+The fundamental computational task is evaluating the partial Dirichlet series:
+\begin{equation}\label{eq:partial-dirichlet}
+  S_N(s) = \sum_{n=1}^{N} n^{-s}, \qquad s = \beta + it.
+\end{equation}
+
+\paragraph{Direct computation.}
+Each term is computed as
+\begin{equation}\label{eq:term-decomp}
+  n^{-s} = n^{-\beta}\,n^{-it} = n^{-\beta}\,e^{-it\ln n},
+\end{equation}
+and separated into real and imaginary parts:
+\begin{align}
+  \re(n^{-s}) &= n^{-\beta}\cos(t\ln n), \label{eq:re-term}\\
+  \im(n^{-s}) &= -n^{-\beta}\sin(t\ln n). \label{eq:im-term}
+\end{align}
+This decomposition avoids complex exponentiation and uses only real arithmetic (two
+multiplications, one cosine, one sine per term), which is more numerically stable and
+cache-friendly.
+
+\paragraph{Alternating series.}
+For System~1, we need the alternating partial sum
+\begin{equation}\label{eq:eta-partial}
+  \eta_N(s) = \sum_{n=1}^{N} (-1)^{n+1}\,n^{-s},
+\end{equation}
+obtained by multiplying each term by $(-1)^{n+1} = +1$ for odd~$n$, $-1$ for even~$n$.
+
+\paragraph{Numerical stability.}
+The terms $n^{-\beta}$ decrease monotonically for $\beta > 0$, ensuring numerical
+stability of the running sum (no catastrophic cancellation in the absolute sense).
+However, for the alternating series with small~$\beta$, consecutive terms nearly cancel,
+leading to loss of relative precision. For $\beta = 0.5$ and large~$n$, consecutive
+terms differ by $O(1/n)$, so the partial sum has relative precision degraded by a factor
+of roughly $\sqrt{N}$. For $N = 10^5$, this costs approximately $2$--$3$ decimal digits,
+which is acceptable in double precision ($\approx 15$--$16$ significant digits).
+
+\paragraph{Precomputation.}
+For a fixed~$\beta$, the values $n^{-\beta}$ ($n = 1, \ldots, N$) are independent of~$t$
+and can be precomputed and stored. This reduces the per-point cost to $O(N)$
+multiplications and trigonometric evaluations.
+
+\paragraph{Error bound.}
+The truncation error for the ordinary Dirichlet series is
+\begin{equation}\label{eq:trunc-ordinary}
+  |S_N(s) - \zeta(s)| \le \sum_{n=N+1}^{\infty} n^{-\beta}.
+\end{equation}
+By integral comparison:
+\begin{equation}\label{eq:integral-bound}
+  \sum_{n=N+1}^{\infty} n^{-\beta}
+  \le \int_{N}^{\infty} x^{-\beta}\,dx
+  = \frac{N^{1-\beta}}{\beta - 1}, \qquad \beta > 1.
+\end{equation}
+For $0 < \beta \le 1$ (the critical strip), the ordinary Dirichlet series does not
+converge, but the alternating series converges. The truncation error for the alternating
+series is bounded by the Dirichlet test (monotone coefficients, bounded partial sums of
+$(-1)^{n+1}$):
+\begin{equation}\label{eq:trunc-alt}
+  |\eta_N(s) - \eta(s)| \le C(s)\,(N+1)^{-\beta},
+\end{equation}
+where $C(s) = O(1)$ for bounded $|s|$. For $\beta = 1/2$ and $N = 10^4$: error
+$\lesssim 10^{-2}$; for $N = 10^6$: error $\lesssim 10^{-3}$. This is the fundamental
+limitation of direct summation in the critical strip.
+
+\paragraph{Euler--Maclaurin acceleration.}
+For improved convergence, we apply the Euler--Maclaurin summation formula to the tail:
+\begin{multline}\label{eq:euler-maclaurin}
+  \sum_{n=N+1}^{M} n^{-s}
+  \approx \int_{N}^{M} x^{-s}\,dx + \frac{1}{2}\bigl(N^{-s} + M^{-s}\bigr) \\
+  + \sum_{k=1}^{p} \frac{B_{2k}}{(2k)!}\,
+  s(s+1)\cdots(s+2k-2)\,\bigl(N^{-(s+2k-1)} - M^{-(s+2k-1)}\bigr) + R_p,
+\end{multline}
+where $B_{2k}$ are Bernoulli numbers and $R_p$ is the remainder. Taking $M \to \infty$
+and using $p$~terms of the asymptotic expansion, the error bound must account for the
+rising factorial $|s(s{+}1)\cdots(s{+}2p{-}2)|$, which grows as $|s|^{2p-1} \sim t^{2p-1}$
+for large~$t$. The correct error estimate is
+\begin{equation}\label{eq:em-error}
+  |R_p| = O\bigl(|s|^{2p-1}\,N^{-(\beta+2p-1)}\bigr).
+\end{equation}
+This means that for large~$t$, the Euler--Maclaurin correction terms grow and the
+asymptotic expansion eventually diverges (as is typical of asymptotic series). The
+optimal number of correction terms $p$ depends on both $N$ and~$t$.
+
+\paragraph{Precision table for Euler--Maclaurin correction ($\beta = 1/2$).}
+In the following table, $|s|^{2p-1}$ denotes the magnitude of the rising factorial
+$s(s{+}1)\cdots(s{+}2p{-}2)$, approximated as $|s|^{2p-1}$ for $|s| \gg 1$. With
+$s = 1/2 + it$, we have $|s| \approx t$ for large~$t$.
+
+\begin{table}[H]
+\centering
+\caption{Euler--Maclaurin effective error at $\beta = 1/2$.}
+\label{tab:em-precision}
+\begin{tabular}{@{}cccccc@{}}
+\toprule
+$N$ & $t$ & $p$ & $|s|^{2p-1}$ & $N^{-(\beta+2p-1)}$ & Effective error \\
+\midrule
+$10^4$ & $10^2$ & 3 & $10^{10}$  & $10^{-22}$ & $\sim 10^{-12}$ \\
+$10^4$ & $10^2$ & 5 & $10^{18}$  & $10^{-38}$ & $\sim 10^{-20}$ \\
+$10^4$ & $10^4$ & 3 & $10^{20}$  & $10^{-22}$ & $\sim 10^{-2}$  \\
+$10^4$ & $10^4$ & 5 & $10^{36}$  & $10^{-38}$ & $\sim 10^{-2}$  \\
+$10^5$ & $10^2$ & 5 & $10^{18}$  & $10^{-47.5}$ & $\sim 10^{-29.5}$ \\
+$10^3$ & $10^2$ & 3 & $10^{10}$  & $10^{-16.5}$ & $\sim 10^{-6.5}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The table reveals that for large~$t$, the Euler--Maclaurin correction becomes unreliable:
+at $t = 10^4$ with any~$p$, the rising factorial overwhelms the $N^{-(\beta+2p-1)}$ decay.
+This is the fundamental reason why the Riemann--Siegel formula (Section~\ref{sec:rs}) is
+essential for $t > 10^3$. For moderate~$t$ ($t < 10^3$), Euler--Maclaurin with $p = 5$
+and $N = 10^4$ provides $\sim 20$ digits of precision, far exceeding double-precision
+limits.
+
+\begin{remark}[On the relationship between acceleration and the DQPT framework]
+\label{rem:acceleration-circularity}
+A methodological subtlety deserves comment. The DQPT framework is formulated in terms of
+the thermodynamic limit $N \to \infty$ of the \emph{finite} partial sums
+$\mathcal{L}_N(\beta,t)$, and the physics resides in the finite-$N$ scaling behavior
+(Section~\ref{sec:system1}). When we apply Euler--Maclaurin summation or Borwein
+acceleration to compute the ``true'' value $\eta(s)$ (the infinite-sum limit), we are
+effectively bypassing the finite-$N$ physics and returning to standard analytic number
+theory. This does not invalidate the computation, but it means that the accelerated
+results should be understood as \emph{high-precision evaluations of the same mathematical
+function}, not as simulations of a physical system at finite~$N$. We use both approaches:
+unaccelerated partial sums (to verify finite-$N$ scaling predictions of the DQPT theory)
+and accelerated evaluations (to achieve the precision needed for reliable zero detection
+and comparison with published tables).
+\end{remark}
+
+\paragraph{Borwein--Cohen--Villegas--Zagier acceleration.}
+For the eta function specifically, Borwein~\cite{borwein2000} showed that the following
+identity provides geometric convergence:
+\begin{equation}\label{eq:borwein}
+  \eta(s) = -\frac{1}{d_n}\sum_{k=0}^{n-1}(-1)^k\,(d_k - d_n)\,(k+1)^{-s},
+\end{equation}
+where the coefficients $d_k$ are defined by
+\begin{equation}\label{eq:borwein-dk}
+  d_k = n\sum_{j=0}^{k} \frac{(n+j-1)!\,4^j}{(n-j)!\,(2j)!}
+\end{equation}
+and $d_n = d_k|_{k=n}$.
+
+\paragraph{Numerical stability of the coefficients.}
+For $n = 40$, the coefficients $d_k$ grow extremely rapidly ($d_{40} \sim 10^{23}$),
+exceeding the range of IEEE~754 double precision (which represents integers exactly only
+up to $2^{53} \approx 9 \times 10^{15}$). To avoid overflow and catastrophic
+cancellation, we compute the \emph{ratios} $c_k = (d_k - d_n)/d_n$ directly via a
+stable recurrence. Define $e_k = d_k/d_n$; then $c_k = e_k - 1$, and the Borwein
+formula becomes
+\begin{equation}\label{eq:borwein-stable}
+  \eta(s) = -\sum_{k=0}^{n-1}(-1)^k\,c_k\,(k+1)^{-s}.
+\end{equation}
+The ratios $e_k$ can be computed via the recurrence relation for the $d_k$ sequence,
+working entirely in double precision without overflow (since $0 \le e_k \le 1$ for all
+$k < n$).
+
+\paragraph{Error bound and region of validity.}
+The approximation error for the eta function satisfies~\cite{borwein2000}
+\begin{equation}\label{eq:borwein-error}
+  |\eta(s) - \text{approximation}| \le 3\,(3 + \sqrt{8}\,)^{-n}
+\end{equation}
+for $s$ in the region $\re(s) > 0$. With $n = 40$:
+\begin{equation}\label{eq:borwein-40}
+  |\text{error}_\eta| < 3 \times 5.828^{-40} \approx 10^{-30}.
+\end{equation}
+If one needs $\zeta(s)$ instead, it is recovered via $\zeta(s) = \eta(s)/(1 - 2^{1-s})$.
+The resulting error in $\zeta$ is amplified by the factor $1/|1 - 2^{1-s}|$, which
+diverges near $s = 1 + 2\pi ik/\log 2$ for $k \in \Z$. For computations in the critical
+strip ($0 < \re(s) < 1$), $|1 - 2^{1-s}|$ is bounded away from zero. To see this:
+$2^{1-s} = 1$ requires both $|2^{1-s}| = 2^{\re(1-s)} = 1$ (i.e., $\re(1-s) = 0$,
+hence $\re(s) = 1$) and $\arg(2^{1-s}) = \im(1-s)\log 2 \in 2\pi\Z$. Since $\re(s) = 1$
+lies outside the open critical strip $0 < \re(s) < 1$, the prefactor $1 - 2^{1-s}$ never
+vanishes inside the strip. Moreover, for $\re(s) \in [0.1, 0.9]$,
+$|1 - 2^{1-s}| \ge c > 0$ for some explicit constant~$c$ (computable for each~$\beta$),
+so the error amplification is bounded.
+
+This geometric convergence rate of $O(5.828^{-n})$ means $n = 40$ terms suffice for
+$\sim 30$ digits of accuracy---far exceeding double precision requirements. This is our
+primary method for computing $\eta(s)$ in the critical strip.
+
+\paragraph{Kahan compensated summation.}
+All summation loops use the Kahan compensated summation algorithm~\cite{kahan1965} to
+reduce the accumulated floating-point rounding error from $O(N\,\eps_{\mathrm{mach}})$
+to $O(\eps_{\mathrm{mach}})$, independent of~$N$. The algorithm maintains a running
+compensation variable that tracks the low-order bits lost in each addition:
+\begin{lstlisting}[language=C++,caption={Kahan compensated summation.}]
+double sum = 0.0, c = 0.0;
+for (int i = 0; i < N; ++i) {
+    double y = x[i] - c;
+    double t = sum + y;
+    c = (t - sum) - y;
+    sum = t;
+}
+\end{lstlisting}
+
+\begin{remark}[FMA and GPU execution]\label{rem:fma}
+CUDA compiles with fused multiply-add (FMA) instructions enabled by default. FMA
+computes $a \cdot b + c$ with a single rounding (rather than the two roundings of
+separate multiply and add), which changes the numerical result at the level of
+$O(\eps)$ per operation. This has two consequences:
+\begin{enumerate}
+  \item The Kahan summation algorithm relies on the rounding behavior of individual
+        additions. With FMA enabled, the compiler may fuse the compensation steps,
+        potentially defeating the purpose of the algorithm. To ensure correct Kahan
+        summation on GPU, use \texttt{\_\_dadd\_rn()} and \texttt{\_\_dsub\_rn()}
+        intrinsics (round-to-nearest double-precision add/subtract) or compile with
+        \texttt{--fmad=false} for the relevant kernels.
+  \item CPU and GPU results will differ at $O(\eps)$ per operation due to different FMA
+        behavior (CPU code compiled with \texttt{-ffp-contract=off} does not use FMA).
+        When comparing CPU and GPU results for validation, the expected discrepancy is
+        $O(N\,\eps)$ without Kahan summation, or $O(\eps)$ with correct Kahan summation
+        on both platforms.
+\end{enumerate}
+\end{remark}
+
+
+\subsection{Riemann--Siegel Theta Function}
+\label{sec:theta}
+
+The Riemann--Siegel theta function is defined by
+\begin{equation}\label{eq:theta-def}
+  \vartheta(t) = \im\!\bigl(\log\Gamma\bigl(\tfrac{1}{4} + \tfrac{it}{2}\bigr)\bigr)
+  - \frac{t}{2}\log\pi.
+\end{equation}
+
+\paragraph{Stirling asymptotic expansion.}
+For $|t| \gg 1$, we use the asymptotic expansion of $\log\Gamma$ via Stirling's series.
+Setting $z = 1/4 + it/2$:
+\begin{equation}\label{eq:stirling}
+  \log\Gamma(z) = \Bigl(z - \tfrac{1}{2}\Bigr)\log z - z + \tfrac{1}{2}\log(2\pi)
+  + \sum_{k=1}^{p} \frac{B_{2k}}{2k(2k-1)\,z^{2k-1}} + R_p(z).
+\end{equation}
+Taking the imaginary part and substituting $z = 1/4 + it/2$, we
+obtain~\cite{edwards1974}\footnote{The first two correction terms ($1/(48t)$ and
+$7/(5760t^3)$) are well known; the higher-order coefficients follow from the Stirling
+series and are tabulated in Edwards~\cite{edwards1974}, Section~6.5.}
+\begin{equation}\label{eq:theta-asymp}
+  \vartheta(t) = \frac{t}{2}\ln\frac{t}{2\pi} - \frac{t}{2} - \frac{\pi}{8}
+  + \frac{1}{48t} + \frac{7}{5760t^3} + \frac{31}{80640t^5}
+  - \frac{127}{430080t^7} + O(t^{-9}).
+\end{equation}
+For our implementation, we use the first four correction terms (through $t^{-7}$), which
+provides more than adequate precision for $t \ge 10$.
+
+\paragraph{Error bound.}
+The error after $p$ terms of the Stirling expansion is bounded by
+\begin{equation}\label{eq:stirling-error}
+  |R_p| \le \frac{|B_{2p+2}|}{(2p+2)(2p+1)\,|z|^{2p+1}}.
+\end{equation}
+For $t > 10$ and $p = 4$ (using terms through $t^{-7}$): $|R_4| < 10^{-12}$, which is
+adequate for double precision. For $t > 50$ and $p = 3$ (through $t^{-5}$):
+$|R_3| < 10^{-14}$.
+
+\paragraph{Validity range.}
+The asymptotic expansion is valid for $t > 0$ but achieves useful precision only for
+$t > t_{\min}$. We require:
+\begin{itemize}
+  \item For double precision ($10^{-15}$): $t_{\min} \approx 10$ (with 4 correction terms).
+  \item For extended precision ($10^{-30}$): $t_{\min} \approx 5$ (with 8 correction terms).
+\end{itemize}
+For $t < t_{\min}$, we fall back to numerical evaluation of $\log\Gamma$ using the
+Lanczos approximation or a rational Chebyshev approximation for~$\Gamma$ in the relevant
+region.
+
+\begin{remark}[Branch cuts and small~$t$]\label{rem:branch}
+The function $\vartheta(t) = \im(\log\Gamma(1/4 + it/2)) - (t/2)\log\pi$ involves the
+complex logarithm of the Gamma function, which has branch cuts. For small~$t$ ($t < 10$),
+the argument $1/4 + it/2$ is close to the real axis where $\Gamma$ has poles at
+$0, -1, -2, \ldots$, and the principal branch of $\log\Gamma$ requires careful handling
+to avoid discontinuities. Our implementation strategy:
+\begin{itemize}
+  \item For $t \ge 10$: use the Stirling asymptotic expansion ($4+$ correction terms),
+        which is well away from branch cut issues and provides adequate precision.
+  \item For $t < 10$: use the Lanczos approximation for $\Gamma(z)$ (with reflection
+        formula for $\re(z) < 0.5$), or equivalently use the recurrence
+        $\Gamma(z{+}1) = z\,\Gamma(z)$ to shift the argument into a region where the
+        Lanczos series converges rapidly. This avoids the branch cut issues of
+        $\log\Gamma$ by computing $\Gamma$ directly and then taking the logarithm.
+\end{itemize}
+In practice, the first zeta zero is at $t \approx 14.13$, so the small-$t$ regime is
+only relevant for theta function evaluation at sub-zero-height positions (used in Gram
+point computation and the Riemann--von Mangoldt formula).
+\end{remark}
+
+
+\subsubsection{The Riemann--Siegel Formula}
+\label{sec:rs}
+
+The Riemann--Siegel (RS) formula provides an efficient method for computing the Hardy
+$Z$-function $Z_H(t) = e^{i\vartheta(t)}\zeta(1/2 + it)$ directly, requiring only
+$O(\sqrt{t/(2\pi)})$ terms rather than $O(t)$ terms for direct
+summation~\cite{titchmarsh1986,gabcke1979}. This is the standard method for large-scale
+zero computations.
+
+\paragraph{Explicit formula.}
+The RS formula is
+\begin{equation}\label{eq:rs-formula}
+  Z_H(t) = 2\sum_{n=1}^{M} n^{-1/2}\cos\bigl(\vartheta(t) - t\ln n\bigr) + R(t),
+\end{equation}
+where $M = \lfloor\sqrt{t/(2\pi)}\rfloor$ is the main sum cutoff and $R(t)$ is the
+remainder term.
+
+\paragraph{First correction term.}
+The leading-order remainder is given by the Riemann--Siegel
+correction~\cite{gabcke1979}:
+\begin{equation}\label{eq:rs-R0}
+  R_0(t) = (-1)^{M-1}\Bigl(\frac{t}{2\pi}\Bigr)^{-1/4}\Psi(p),
+\end{equation}
+where $p = \sqrt{t/(2\pi)} - M$ is the fractional part and $\Psi(p)$ is the
+Riemann--Siegel function:
+\begin{equation}\label{eq:rs-psi}
+  \Psi(p) = \frac{\cos\bigl(2\pi(p^2 - p - 1/16)\bigr)}{\cos(2\pi p)}.
+\end{equation}
+Higher-order correction terms $R_1, R_2, \ldots$ involve derivatives of~$\Psi$ and
+powers of $(t/(2\pi))^{-1/2}$, each successive term reducing the error by an additional
+factor of $O(t^{-1/2})$:
+\begin{equation}\label{eq:rs-expansion}
+  R(t) = R_0(t) + R_1(t) + R_2(t) + \cdots,
+\end{equation}
+where $|R_k(t)| = O(t^{-(2k+3)/4})$ (Siegel, 1932; Gabcke~\cite{gabcke1979}).
+
+\paragraph{Error bounds after successive corrections.}
+The following bounds are verified against
+Titchmarsh~\cite{titchmarsh1986} and Gabcke~\cite{gabcke1979}:
+\begin{align}
+  \text{Main sum only:}\qquad &|Z_H(t) - \text{main sum}| = O(t^{-3/4}),
+    \label{eq:rs-err0}\\
+  \text{Main sum} + R_0:\qquad &|\text{error}| = O(t^{-5/4}),
+    \label{eq:rs-err1}\\
+  \text{Main sum} + R_0 + R_1:\qquad &|\text{error}| = O(t^{-7/4}).
+    \label{eq:rs-err2}
+\end{align}
+Quantitatively (Gabcke~\cite{gabcke1979}): the error of the main sum alone is less than
+$(3/2)\,t^{-3/4}$ for $t > 125$. Including the $R_0$ correction, the error is less than
+$0.053\,t^{-5/4}$ for $t \ge 200$.
+
+For $t = 10^4$: the uncorrected remainder is $O(t^{-3/4}) = O(10^{-3})$. Including
+$R_0$, the error improves to $O(t^{-5/4}) = O(10^{-5})$. Including $R_0 + R_1$, the
+error is $O(t^{-7/4}) = O(10^{-7})$.
+
+\paragraph{Computational advantage.}
+The main sum requires only $M = \lfloor\sqrt{t/(2\pi)}\rfloor$ terms:
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+$t$ & $M$ \\
+\midrule
+$10^4$ & $\sim 40$ \\
+$10^6$ & $\sim 399$ \\
+$10^8$ & $\sim 3989$ \\
+$10^{10}$ & $\sim 39894$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Compare this to direct summation of the Dirichlet series, which requires $N \gg t$ for
+adequate convergence. The RS formula is essential for computations at large height.
+
+\paragraph{Implementation notes.}
+Each term in the main sum requires evaluation of
+$n^{-1/2}\cos(\vartheta(t) - t\ln n)$. Since $n^{-1/2}$ is independent of~$t$, it can
+be precomputed. The argument $\vartheta(t) - t\ln n$ must be reduced modulo $2\pi$
+carefully to avoid loss of precision for large~$t$ (see Section~\ref{sec:trig} on
+trigonometric evaluation).
+
+
+\subsection{Zero Detection}
+\label{sec:zero-detection}
+
+\subsubsection{Bisection on the Hardy $Z$-function}
+\label{sec:bisection}
+
+The Hardy $Z$-function $Z_H(t)$ is real-valued, and its sign changes correspond to
+simple zeros of $\zeta(1/2 + it)$. Our primary zero-detection method is:
+\begin{enumerate}
+  \item Evaluate $Z_H(t)$ on a uniform grid $t_0, t_0 + \Delta t, t_0 + 2\Delta t, \ldots$
+  \item Identify intervals $[t_k, t_{k+1}]$ where $Z_H$ changes sign.
+  \item Refine each sign change by bisection to precision~$\eps$.
+\end{enumerate}
+
+\paragraph{Grid spacing.}
+The average spacing between consecutive zeros near height~$T$ is
+\begin{equation}\label{eq:zero-spacing}
+  \delta_{\mathrm{zero}} \sim \frac{2\pi}{\log(T/(2\pi))}.
+\end{equation}
+For $T = 100$: $\delta_{\mathrm{zero}} \approx 2.3$. For $T = 1000$:
+$\delta_{\mathrm{zero}} \approx 1.2$. For $T = 10000$:
+$\delta_{\mathrm{zero}} \approx 0.86$. We choose $\Delta t = \delta_{\mathrm{zero}}/4$
+to ensure we do not miss any zeros (assuming zeros are roughly uniformly spaced, which
+is a reasonable heuristic for the initial scan).
+
+\subsubsection{Gram's Law and Its Failures}
+\label{sec:gram}
+
+Gram points are the values $g_n$ defined by $\vartheta(g_n) = n\pi$ for
+$n = 0, 1, 2, \ldots$ Gram's ``law'' (actually a heuristic) states that
+$(-1)^n Z_H(g_n) > 0$, i.e., $Z_H$ changes sign between consecutive Gram
+points. This holds for approximately $73\%$ of Gram
+intervals~\cite{trudgian2011}.
+
+We use Gram points as an initial grid but do not rely on Gram's law for correctness.
+Instead, we use finer subdivision wherever Gram's law fails (i.e., where $Z_H$ has the
+same sign at two consecutive Gram points).
+
+\subsubsection{Turing's Method for Zero Count Certification}
+\label{sec:turing}
+
+Turing~\cite{turing1953} developed a method to certify that all zeros up to height~$T$
+have been found. The method relies on the Riemann--von Mangoldt formula for the
+zero-counting function:
+\begin{equation}\label{eq:rvm}
+  N(T) = \frac{T}{2\pi}\log\frac{T}{2\pi} - \frac{T}{2\pi} + \frac{7}{8}
+  + S(T) + O\!\left(\frac{1}{T}\right),
+\end{equation}
+where $S(T) = (1/\pi)\arg\zeta(1/2 + iT)$ satisfies $|S(T)| = O(\log T)$
+unconditionally\footnote{See Trudgian~\cite{trudgian2011} for modern explicit bounds.
+Note that $S(T)$ is \emph{not} bounded by a constant; the bound $|S(T)| = O(\log T)$
+reflects the irregular distribution of zeta zeros.}. If the number of detected sign
+changes of $Z_H$ in $[0, T]$ agrees with the nearest integer to
+$(T/(2\pi))\log(T/(2\pi)) - T/(2\pi) + 7/8$, then all zeros in that range have been
+found (up to the uncertainty introduced by $S(T)$).
+
+We implement this check as a post-hoc validation: after detecting zeros up to
+height~$T$, we verify that the count matches the Riemann--von Mangoldt prediction.
+
+\subsubsection{Expected Zero Density}
+\label{sec:zero-density}
+
+The number of nontrivial zeros with $0 < \im(s) \le T$ is given by the Riemann--von
+Mangoldt formula~\eqref{eq:rvm}. The leading terms give the approximation:
+\begin{equation}\label{eq:rvm-approx}
+  N(T) \approx \frac{T}{2\pi}\log\frac{T}{2\pi} - \frac{T}{2\pi} + \frac{7}{8}.
+\end{equation}
+This gives:
+\begin{center}
+\begin{tabular}{@{}rl@{}}
+\toprule
+$T$ & $N(T)$ \\
+\midrule
+$100$ & $\sim 29$ \\
+$1{,}000$ & $\sim 649$ \\
+$10{,}000$ & $\sim 10{,}142$ \\
+$100{,}000$ & $\sim 138{,}069$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+
+\subsection{Convergence Analysis}
+\label{sec:convergence}
+
+\subsubsection{Convergence of $L(\beta, t)$ with $N$}
+\label{sec:conv-L}
+
+For fixed $s = \beta + it$ with $0 < \beta < 1$, the alternating partial sum
+$\eta_N(s)$ converges to $\eta(s)$ as $N \to \infty$. The rate of convergence is
+\begin{equation}\label{eq:conv-rate}
+  |\eta_N(s) - \eta(s)| = O(N^{-\beta}).
+\end{equation}
+This is the dominant source of error. For $\beta = 1/2$:
+\begin{center}
+\begin{tabular}{@{}rl@{}}
+\toprule
+$N$ & Error \\
+\midrule
+$10^4$ & $\sim 10^{-2}$ \\
+$10^6$ & $\sim 10^{-3}$ \\
+$10^8$ & $\sim 10^{-4}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+This slow convergence is the fundamental computational bottleneck. To achieve precision
+$\delta$, we need $N \sim \delta^{-1/\beta} = \delta^{-2}$ for $\beta = 1/2$. This is
+much worse than the Riemann--Siegel formula, which achieves precision~$\delta$ with
+$O(\sqrt{T})$ terms, but the direct approach has the virtue of simplicity and direct
+connection to the physical (DQPT) interpretation.
+
+\paragraph{Improvement via Euler--Maclaurin.}
+With $p$ terms of Euler--Maclaurin correction applied to the tail sum beyond~$N$, the
+effective error becomes $O(|s|^{2p-1}\,N^{-(\beta+2p-1)})$ (see
+Section~\ref{sec:dirichlet} for the full bound and precision table). For $p = 5$,
+$\beta = 1/2$, and moderate~$t$ ($t < 10^4$): the error is well below double-precision
+limits for $N \ge 10^4$. This makes Euler--Maclaurin-corrected summation practical for
+moderate~$t$. For large~$t$, the Riemann--Siegel formula (Section~\ref{sec:rs}) is
+preferable.
+
+\subsubsection{Required $N$ as a Function of $t$ and Precision}
+\label{sec:required-N}
+
+The terms $n^{-s} = n^{-\beta}e^{-it\ln n}$ oscillate with frequency proportional
+to~$t$. The Nyquist criterion requires that we sample these oscillations adequately, but
+since we are summing (not sampling) the series, the oscillation frequency does not
+directly increase the required~$N$. However, near zeros of~$\zeta$, the partial sums
+exhibit cancellation at scale $O(N^{-\beta})$, so detecting zeros to relative
+precision~$\delta$ requires
+\begin{equation}\label{eq:required-N}
+  N \ge \delta^{-1/\beta}.
+\end{equation}
+For $\beta = 1/2$ and $\delta = 10^{-6}$ (sufficient to distinguish a zero from a
+near-miss): $N \ge 10^{12}$. This is impractical without acceleration techniques.
+
+With Euler--Maclaurin ($p = 5$) and accounting for the $|s|^{2p-1}$ factor: the required
+$N$ satisfies $|s|^{2p-1}\,N^{-(\beta+2p-1)} < \delta$, giving
+\begin{equation}\label{eq:required-N-em}
+  N \ge \Bigl(\frac{|s|^{2p-1}}{\delta}\Bigr)^{1/(\beta+2p-1)}.
+\end{equation}
+For $t = 100$, $|s| \approx 100$, $p = 5$, $\beta = 0.5$:
+$N \ge (10^{18}/10^{-6})^{1/9.5} = 10^{24/9.5} \approx 336$. For $t = 10^4$:
+$N \ge (10^{36}/10^{-6})^{1/9.5} = 10^{42/9.5} \approx 26{,}300$. These are achievable,
+showing that Euler--Maclaurin correction is essential for practical computation at high
+precision, though the required $N$ grows with~$t$.
+
+\subsubsection{Computational Complexity}
+\label{sec:complexity}
+
+Direct summation: $O(N)$ operations per $(\beta, t)$ point. For $M$ grid points in the
+$(\beta, t)$ plane, the total cost is $O(N \cdot M)$.
+
+With Euler--Maclaurin: $O(N + p)$ per point, where $p$ is small ($5$--$10$). For a
+moderate $N$ ($10^3$ to $10^4$), the cost is dominated by the direct sum, giving
+$O(N \cdot M)$ total.
+
+For a grid of $M_\beta = 100$ values of~$\beta$ and $M_t = 10{,}000$ values of~$t$,
+with $N = 10^4$:
+\begin{equation}\label{eq:total-ops}
+  \text{Total operations} \sim 10^4 \times 10^6 = 10^{10}.
+\end{equation}
+On a single CPU core, this workload requires substantial time (minutes to hours 
+depending on architecture and instruction set). While GPU parallelism 
+drastically reduces wall-clock time, the hardware-level bottleneck of 
+FP64 transcendental units must be considered (Section~\ref{sec:throughput}).
+
+
+\subsection{GPU Parallelization Strategy}
+\label{sec:gpu}
+
+\subsubsection{Parallelism Structure}
+\label{sec:parallel}
+
+The computation of $L(\beta, t)$ or $G(\beta, t)$ at each $(\beta, t)$ point is
+completely independent of all other points. This is an embarrassingly parallel workload,
+ideal for GPU execution.
+
+\paragraph{Parallelization scheme.}
+\begin{itemize}
+  \item Each CUDA thread computes one $(\beta, t)$ point.
+  \item The thread iterates over $n = 1, \ldots, N$, accumulating the partial sum.
+  \item The result (a complex number for~$L$, a real number for~$G$) is written to global
+        memory.
+\end{itemize}
+
+\subsubsection{Memory Model}
+\label{sec:memory}
+
+For each $\beta$ value, we precompute the array $\{n^{-\beta}\}_{n=1}^{N}$ and store it
+in global memory (or texture memory for cached access). Each thread reads this array and
+computes the trigonometric factors $\cos(t\ln n)$ and $\sin(t\ln n)$ on the fly.
+
+\paragraph{Memory requirements.}
+\begin{itemize}
+  \item Precomputed $n^{-\beta}$: $N \times \texttt{sizeof(double)} = N \times 8$ bytes
+        per $\beta$ value. For $N = 10^5$ and $100$~$\beta$ values: $80$~MB (fits in
+        $6$~GB VRAM).
+  \item Precomputed $\ln(n)$: $N \times 8$ bytes $= 0.8$~MB (shared across all $\beta$
+        values).
+  \item Output array: $M_\beta \times M_t \times \texttt{sizeof(double)}$ per output
+        quantity. For $100 \times 10{,}000 = 10^6$ points: $8$~MB.
+  \item Total VRAM usage: $< 100$~MB, well within $6$~GB.
+\end{itemize}
+
+\subsubsection{Expected Throughput}
+\label{sec:throughput}
+
+RTX~2060 specifications:
+\begin{itemize}
+  \item 1920 CUDA cores.
+  \item 6~GB GDDR6 VRAM.
+  \item Base clock: 1365~MHz.
+  \item FP64 throughput: approximately $210$~GFLOPS ($1/32$ of FP32).
+\end{itemize}
+
+Since our computation involves double-precision transcendental functions (\texttt{cos},
+\texttt{sin}, \texttt{exp}, \texttt{log}), the throughput is limited by the special
+function units (SFU).
+
+\begin{remark}[SFU throughput for transcendentals]\label{rem:sfu}
+On NVIDIA GPUs, the SFU throughput for double-precision transcendental functions is
+approximately $1/4$ of the FP64 ALU throughput (and for some transcendentals, up to
+$1/10$ due to multi-pass evaluation). Since our workload is transcendental-heavy (each
+term requires one \texttt{cos} and one \texttt{sin} evaluation), the effective throughput
+must be derated by $4$--$10\times$ compared to the peak FP64 rate.
+\end{remark}
+
+\paragraph{Revised throughput estimates.}
+\begin{itemize}
+  \item Per-point cost: $N$ multiplications $+ N$ transcendental evaluations. The
+        transcendentals dominate: effective cost $\sim 10N$ FLOPS equivalent (accounting
+        for SFU pipeline occupancy).
+  \item For $N = 10^4$: $\sim 10^5$ FLOPS-equivalent per point.
+  \item Effective throughput:
+        $(210 \times 10^9/4)/(10^5) \approx 5 \times 10^5$ points/second (conservative;
+        actual throughput depends on occupancy and memory access patterns).
+\end{itemize}
+
+For a $180 \times 10{,}000$ grid ($1.8 \times 10^6$ points): approximately $3$--$4$
+seconds. For a $180 \times 100{,}000$ grid ($1.8 \times 10^7$ points): approximately
+$30$--$40$ seconds. For $N = 10^5$ and a $180 \times 10{,}000$ grid: approximately
+$30$--$40$ seconds.
+
+These revised estimates ($4$--$10\times$ slower than naive FP64 peak estimates) still show
+that GPU-accelerated computation is more than sufficient for our parameter ranges. Even
+with additional overheads (memory latency, register pressure, thread divergence), runtimes
+remain under a few minutes for the full sweep.
+
+\subsubsection{Batch Size Estimation}
+\label{sec:batch}
+
+We organize the computation into batches to manage VRAM and kernel launch overhead:
+\begin{itemize}
+  \item Batch size: $10^5$ to $10^6$ $(\beta, t)$ points per kernel launch.
+  \item Number of batches: total grid size / batch size.
+  \item For a $100 \times 100{,}000$ grid: $10^7 / 10^6 = 10$ batches.
+\end{itemize}
+Each batch completes in $< 1$~second, so the total wall-clock time (including data
+transfer) is under $10$~seconds for the full sweep.
