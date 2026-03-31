@@ -3,6 +3,7 @@
 
 # Gradle
 .gradle/
+.idea
 build/
 
 # LaTeX build artifacts
