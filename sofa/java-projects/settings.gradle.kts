@@ -1,1 +1,1 @@
-rootProject.name = "sofa"
+rootProject.name = "java-visualizations"

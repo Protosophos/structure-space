@@ -3,7 +3,7 @@ plugins {
     application
 }
 
-group = "sofa"
+group = "java-visualizations"
 version = "1.0.0"
 
 java {
