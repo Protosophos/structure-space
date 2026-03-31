@@ -1,0 +1,137 @@
+%% ====================================================================
+\section{Implementation Architecture}
+\label{sec:architecture}
+%% ====================================================================
+
+\subsection{File Structure}
+\label{sec:files}
+
+The project is organized into four directories: \texttt{src/} (core computation),
+\texttt{test/} (validation), \texttt{gpu/} (CUDA kernels), and \texttt{data/}
+(reference tables).
+
+\paragraph{Core source files (\texttt{src/}).}
+
+\begin{longtable}{@{}p{4.2cm}p{8.5cm}@{}}
+\toprule
+\textbf{File} & \textbf{Purpose} \\
+\midrule
+\endhead
+\texttt{dirichlet.h/.cpp}      & Partial Dirichlet series $S_N(s)$ and $\eta_N(s)$ \\
+\texttt{partition.h/.cpp}      & Partition function $Z(\beta) = \sum n^{-\beta}$ with precomputation \\
+\texttt{theta.h/.cpp}          & Riemann-Siegel theta function $\vartheta(t)$; Stirling expansion with error control \\
+\texttt{system1.h/.cpp}        & $\mathcal{L}(\beta,t)$: accumulated phase factor (System~1) with alternating series \\
+\texttt{system2.h/.cpp}        & $\mathcal{G}(\beta,t)$: Loschmidt amplitude (System~2) with $Z$-function connection \\
+\texttt{rate\_function.h/.cpp} & Rate function $\mathcal{F}(\beta,t)$ with underflow guard and sentinel detection \\
+\texttt{zeros.h/.cpp}          & Zero detection: bisection, Gram points, Turing zero-count check \\
+\texttt{euler\_maclaurin.h/.cpp} & Euler-Maclaurin tail correction; Bernoulli number computation \\
+\texttt{kahan.h}               & Kahan compensated summation \\
+\texttt{main.cpp}              & Entry point; CLI argument parsing \\
+\texttt{config.h}              & Compile-time and runtime configuration \\
+\bottomrule
+\end{longtable}
+
+\paragraph{Test suite (\texttt{test/}).}
+
+\begin{longtable}{@{}p{5cm}p{7.7cm}@{}}
+\toprule
+\textbf{File} & \textbf{Purpose} \\
+\midrule
+\endhead
+\texttt{test\_dirichlet.cpp}        & Unit tests for $S_N$ and $\eta_N$ against \texttt{mpmath} \\
+\texttt{test\_theta.cpp}            & Unit tests for $\vartheta(t)$ \\
+\texttt{test\_known\_zeros.cpp}     & Verification against first 100 known zeros \\
+\texttt{test\_convergence.cpp}      & Convergence rate $O(N^{-\beta})$ verification \\
+\texttt{test\_off\_line.cpp}        & Off-critical-line scan \\
+\texttt{test\_rate\_function.cpp}   & Rate function value checks (Controls 1--2) \\
+\texttt{test\_cross\_validation.cpp}& System~1 vs System~2 consistency \\
+\texttt{reference\_values.h}        & High-precision reference values from \texttt{mpmath} \\
+\bottomrule
+\end{longtable}
+
+\paragraph{GPU kernels (\texttt{gpu/}).}
+
+\begin{longtable}{@{}p{4.2cm}p{8.5cm}@{}}
+\toprule
+\textbf{File} & \textbf{Purpose} \\
+\midrule
+\endhead
+\texttt{sweep.cu}           & CUDA kernel for $(\beta,t)$ grid evaluation \\
+\texttt{gpu\_dirichlet.cuh} & Device-side Dirichlet series \\
+\texttt{gpu\_config.cuh}    & GPU-specific configuration \\
+\bottomrule
+\end{longtable}
+
+\paragraph{Data and output.}
+\texttt{data/zeros\_known.txt} contains the first $100+$ known nontrivial zeta zeros
+(sourced from the LMFDB~\cite{lmfdb} and Odlyzko~\cite{odlyzko1989}).
+The \texttt{results/} directory is populated at runtime.
+
+
+\subsection{Language Choices}
+\label{sec:languages}
+
+\paragraph{Core computation: C++17.}
+Chosen for:
+\begin{itemize}
+  \item Direct control over floating-point arithmetic (IEEE~754 compliance via compiler
+        flags \texttt{-ffp-contract=off}, \texttt{-fno-fast-math}).
+  \item Efficient memory management for large arrays.
+  \item Compatibility with CUDA (which requires C++ host code).
+  \item No garbage collection pauses during long computations.
+\end{itemize}
+
+\paragraph{GPU acceleration: CUDA C++.}
+Chosen for:
+\begin{itemize}
+  \item Native support on the target hardware (NVIDIA RTX~2060).
+  \item Fine-grained control over thread/block organization.
+  \item Access to hardware special function units for \texttt{sin}/\texttt{cos}/\texttt{exp}.
+\end{itemize}
+
+\paragraph{Test validation: Python/mpmath (external).}
+Reference values are precomputed using \texttt{mpmath} with $50$-digit precision and
+hardcoded into the C++ test suite. This removes any runtime dependency on Python.
+
+
+\subsection{Dependencies}
+\label{sec:deps}
+
+The implementation is designed to minimize external dependencies:
+\begin{itemize}
+  \item \textbf{C++ standard library} (C++17): containers, algorithms, I/O,
+        \texttt{<cmath>}.
+  \item \textbf{CUDA Toolkit} ($\ge 11.0$): for GPU kernels. Optional; the code compiles
+        and runs in CPU-only mode without CUDA.
+  \item \textbf{No other external dependencies.} No Boost, no Eigen, no BLAS/LAPACK, no
+        numerical libraries. All required mathematical functions (Stirling expansion,
+        Kahan summation, Bernoulli numbers, bisection) are implemented from scratch for
+        full transparency and auditability.
+\end{itemize}
+
+
+\subsection{Build System}
+\label{sec:build}
+
+A single Makefile with the following targets:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Command} & \textbf{Action} \\
+\midrule
+\texttt{make}       & Build CPU-only version \\
+\texttt{make gpu}   & Build with CUDA GPU support \\
+\texttt{make test}  & Build and run all unit tests \\
+\texttt{make clean} & Remove build artifacts \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Compiler flags:
+\begin{itemize}
+  \item \texttt{-std=c++17 -O2 -Wall -Wextra -Wpedantic}
+  \item \texttt{-ffp-contract=off} (prevent fused multiply-add, which can change results)
+  \item \texttt{-fno-fast-math} (ensure IEEE~754 compliance)
+  \item For CUDA: \texttt{-arch=sm\_75} (Turing architecture, RTX~2060)
+\end{itemize}

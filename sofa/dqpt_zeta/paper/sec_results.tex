@@ -1,0 +1,98 @@
+%% ====================================================================
+\section{Expected Results}
+\label{sec:results}
+%% ====================================================================
+
+\subsection{If RH Holds (Expected Scenario)}
+\label{sec:rh-holds}
+
+Under the assumption that~RH is true---supported by all prior numerical evidence and by
+classical zero-density estimates, which imply that $100\%$ of zeros lie on the critical
+line in a density sense\footnote{This density result already followed from the prior
+$O(T^{3/4+\eps})$ bound on the number of off-line zeros~\cite{ingham1940}, since
+$T^{3/4}/N(T) \to 0$. Guth and Maynard's 2024 improvement~\cite{guthmaynard2024}
+sharpens the exponent to $O(T^{3/5+\eps})$, the first improvement in over 80~years, but
+the qualitative conclusion of $100\%$ density was already known.}---we expect:
+
+\begin{enumerate}
+  \item \textbf{System~1 ($L$):} $L(1/2, t)$ vanishes at each of the $\sim 649$
+        nontrivial zeros with $0 < \im(s) \le 1000$, with $|L(1/2, t_k)| < \eps$ for
+        each known zero~$t_k$. For $\beta \neq 1/2$, $|L(\beta, t)|$ remains bounded
+        away from zero for all $t \in [0, 1000]$.
+
+  \item \textbf{System~2 ($G$):} $G(1/2, t)$ exhibits sign changes at exactly the same
+        positions as the Hardy $Z$-function $Z_H(t)$, with the detected zero positions
+        matching Odlyzko's tables~\cite{odlyzko1989} to within~$10^{-4}$. The zero count
+        matches the Riemann--von Mangoldt prediction.
+
+  \item \textbf{Rate function:} $F_1(1/2, t)$ exhibits sharp peaks (approaching~$1$, or
+        $\ln 2$ under the Wei et~al.\ $\log$-base-$2$ normalization) at each zero, with
+        $F_1(1/2, t) \approx 1/2$ (or $(1/2)\ln 2$ under Wei et~al.\ normalization)
+        between zeros. The 2D phase diagram $|L(\beta, t)|$ in the $(\beta, t)$ plane
+        shows dark lines (near-vanishing $|L|$) exclusively at $\beta = 1/2$.
+
+  \item \textbf{Off-critical-line scan:} No values of $|L(\beta, t)|$ below the threshold
+        $\eps = 10^{-6}$ for any $\beta \neq 1/2$ in the scanned range.
+\end{enumerate}
+
+
+\subsection{If RH Fails (Unexpected Scenario)}
+\label{sec:rh-fails}
+
+If a counterexample to~RH exists within our scanned range, we would observe:
+\begin{enumerate}
+  \item A value $(\beta_0, t_0)$ with $\beta_0 \neq 1/2$ where
+        $|L(\beta_0, t_0)| < \eps$.
+  \item Upon refinement, the zero would persist and sharpen ($|L|$ decreasing with
+        increasing~$N$).
+  \item The phase diagram would show an off-critical-line zero---a dark point or line at
+        $\beta \neq 1/2$.
+  \item Direct evaluation of $\zeta(\beta_0 + it_0)$ via independent methods (e.g.,
+        Borwein acceleration or Euler--Maclaurin) would confirm the
+        zero.\footnote{System~2's $G$ cannot be used for off-line confirmation due to the
+        false-positive issue described in Section~\ref{sec:system2}.}
+\end{enumerate}
+
+Such a discovery would require extraordinary care in verification: independent
+reimplementation, arbitrary-precision computation, and comparison with direct zeta
+evaluation. The burden of proof for disproving~RH is immense, and any claimed
+counterexample would need to withstand intense scrutiny.
+
+
+\subsection{Limitations}
+\label{sec:limitations}
+
+We emphasize the inherent limitations of the numerical approach:
+\begin{enumerate}
+  \item \textbf{Cannot prove~RH.} Even scanning up to $T = 10^{10}$ and finding all zeros
+        on the critical line does not prove that all zeros (of which there are infinitely
+        many) lie on the critical line. Proof requires a fundamentally different
+        (analytical or algebraic) approach.
+
+  \item \textbf{Finite precision (FP64 wall).} Our computations use IEEE~754
+        double-precision arithmetic ($\sim 15.9$ decimal digits). This imposes two
+        distinct limitations: (a)~a zero at $\beta_0 = 1/2 + 10^{-20}$ would be
+        indistinguishable from $\beta_0 = 1/2$; (b)~for $t > 10^7$, trigonometric
+        argument reduction degrades precision below $8$ significant digits, rendering
+        zero detection unreliable (see Section~\ref{sec:trig} for the full analysis).
+        Extending the implementation to arbitrary-precision arithmetic
+        (MPFR\footnote{The GNU MPFR library provides correctly-rounded multiple-precision
+        floating-point computation with arbitrary mantissa width, at the cost of
+        $O(p\log p)$ per operation for $p$-bit precision. For $p = 128$ (quad precision),
+        the overhead is approximately $4$--$10\times$ relative to FP64; for $p = 256$,
+        approximately $10$--$25\times$. This is a tractable overhead for extending
+        reliable computation to $t \sim 10^{15}$ or beyond.}) would extend the reliable
+        range to arbitrarily large~$t$, at the cost of proportionally increased
+        computation time.
+
+  \item \textbf{Finite scan range.} Zeros with $\im(s) > T_{\max}$ are not tested.
+        Counterexamples to~RH, if they exist, might occur only at astronomically large
+        heights. The first known failure of Gram's law occurs at Gram point $g_{126}$,
+        and it is conceivable that the first off-critical-line zero (if any) could be at
+        heights far beyond computational reach.
+
+  \item \textbf{Indirect detection.} We detect zeros of~$L$ and~$G$, which are related
+        to but not identical with~$\zeta$. Any discrepancy between $L$-zeros and
+        $\zeta$-zeros must be attributed to finite-$N$ effects rather than interpreted as
+        a new mathematical result.
+\end{enumerate}
