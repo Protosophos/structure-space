@@ -1,0 +1,165 @@
+%% ====================================================================
+\section{Error Analysis}
+\label{sec:errors}
+%% ====================================================================
+
+\subsection{Truncation Error (Finite $N$)}
+\label{sec:trunc}
+
+The dominant systematic error arises from truncating the Dirichlet series at $N$ terms.
+
+\paragraph{Without Euler--Maclaurin correction.}
+\begin{equation}\label{eq:trunc-no-em}
+  |\eta_N(s) - \eta(s)| \le C(s)\,(N{+}1)^{-\beta},
+\end{equation}
+where $C(s) = O(1)$ for bounded $|s|$. For $\beta = 0.5$ and $N = 10^4$: truncation
+error $\sim 10^{-2}$.
+
+\paragraph{With Euler--Maclaurin correction ($p$ terms).}
+\begin{equation}\label{eq:trunc-em}
+  |\eta_N^{\mathrm{EM}}(s) - \eta(s)|
+  \le C_p\,|s|^{2p-1}\,N^{-(\beta + 2p - 1)},
+\end{equation}
+where the factor $|s|^{2p-1}$ accounts for the rising factorial in the correction terms
+(see Section~\ref{sec:dirichlet}). For $\beta = 0.5$, $p = 5$, $N = 10^4$, and
+$t = 100$: truncation error $\sim 10^{9} \times 10^{-38} = 10^{-29}$. See the precision
+table in Section~\ref{sec:dirichlet} (Table~\ref{tab:em-precision}) for additional
+parameter combinations.
+
+This error is purely systematic and can be reduced by increasing $N$ (at the cost of
+more computation) or by choosing $p$ optimally for the given $(N, t)$ pair.
+
+
+\subsection{Floating-Point Precision}
+\label{sec:trig}
+
+IEEE~754 double-precision arithmetic provides approximately $15.9$ significant decimal
+digits ($53$-bit mantissa). The key sources of floating-point error are:
+
+\paragraph{Summation error.}
+Accumulating $N$ terms in floating point introduces rounding error of order
+$N\,\eps_{\mathrm{mach}} \sim N \times 10^{-16}$. For $N = 10^4$: rounding error
+$\sim 10^{-12}$. For $N = 10^6$: rounding error $\sim 10^{-10}$. This can be mitigated
+by Kahan compensated summation~\cite{kahan1965}, which reduces the error to
+$O(\eps_{\mathrm{mach}})$ independent of~$N$.
+
+\paragraph{Trigonometric evaluation and the FP64 precision wall.}
+$\cos(t\ln n)$ and $\sin(t\ln n)$ are evaluated by the standard library, with error
+$O(\eps_{\mathrm{mach}})$ per evaluation. For large arguments ($t\ln n \gg 1$), the
+argument reduction step introduces additional error proportional to
+$t\ln(n)\,\eps_{\mathrm{mach}}$. This constitutes a fundamental precision wall for
+double-precision computation:
+\begin{center}
+\begin{tabular}{@{}rll@{}}
+\toprule
+$t$ & Argument $t\ln n$ (at $n = 10^4$) & Effective digits lost \\
+\midrule
+$10^3$ & $\sim 10^4$ & $\sim 4$ \\
+$10^5$ & $\sim 10^6$ & $\sim 6$ \\
+$10^7$ & $\sim 10^8$ & $\sim 8$ \\
+$10^{10}$ & $\sim 10^{11}$ & $\sim 11$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+At $t > 10^7$, fewer than $8$ significant digits remain in the trigonometric evaluation,
+degrading zero detection to tolerances worse than $10^{-8}$. At $t > 10^{10}$, the
+argument reduction error ($\sim 10^{-5}$) exceeds the zero-detection threshold, rendering
+double-precision computation unreliable.
+
+For scientifically rigorous computation at large heights ($t > 10^7$), arbitrary-precision
+arithmetic (e.g., MPFR~/ GNU~MP, or at minimum IEEE~754 quad precision via
+\texttt{\_\_float128} or \texttt{long double} on x86) is required. The Riemann--Siegel
+formula (Section~\ref{sec:rs}) partially mitigates this issue by requiring only
+$M = O(\sqrt{t})$ terms (reducing the maximum argument to
+$t\ln M \sim t\ln\sqrt{t} = (t/2)\ln t$), but the theta function evaluation
+$\vartheta(t)$ itself involves arguments of order~$t$, so the precision wall persists.
+Our current implementation is therefore limited to $t < 10^7$ for reliable zero detection
+in double precision, with reduced reliability up to $t \sim 10^{10}$.
+
+\paragraph{Cancellation near zeros.}
+When $L(\beta, t)$ is near zero, the partial sum involves extensive cancellation. The
+absolute value of~$L$ near a zero is $O(N^{-\beta})$, while individual terms have
+magnitude $O(n^{-\beta})$ with the largest terms $O(1)$. Without compensated summation,
+the absolute error in the sum is $O(N\,\eps_{\mathrm{mach}})$ (each of $N$ additions
+contributes $O(\eps_{\mathrm{mach}})$ rounding error). With Kahan summation, the absolute
+error is reduced to $O(\eps_{\mathrm{mach}})$, independent of~$N$. The value of~$L$ near
+a zero is $O(N^{-\beta})$. The relative precision is therefore:
+\begin{align}
+  \text{Without Kahan:}\quad &\text{relative error}
+    \sim \frac{N\,\eps_{\mathrm{mach}}}{N^{-\beta}}
+    = N^{1+\beta}\,\eps_{\mathrm{mach}}, \label{eq:no-kahan}\\
+  \text{With Kahan:}\quad &\text{relative error}
+    \sim \frac{\eps_{\mathrm{mach}}}{N^{-\beta}}
+    = N^{\beta}\,\eps_{\mathrm{mach}}. \label{eq:with-kahan}
+\end{align}
+For $N = 10^4$ and $\beta = 0.5$: without Kahan, relative precision
+$\sim 10^6 \times 10^{-16} = 10^{-10}$. With Kahan summation:
+$\sim N^\beta\,\eps_{\mathrm{mach}} = 10^2 \times 10^{-16} = 10^{-14}$.
+
+This is adequate for zero detection with tolerance $10^{-6}$.
+
+
+\subsection{Underflow Guard for $\log|L_N|$}
+\label{sec:underflow}
+
+The rate function $F_1(\beta, t) = -(1/\ln N)\ln|L_N(\beta, t)|$ involves taking the
+logarithm of $|L_N|$. In floating-point arithmetic, $|L_N|$ can underflow to exactly
+zero (when $\beta$ is large or at a near-zero of $\eta$ with large~$N$), producing
+$\log(0) = -\infty$ and corrupting downstream computations.
+
+\paragraph{Guard implementation.}
+We use:
+\begin{equation}\label{eq:underflow-guard}
+  F_1 = -\frac{1}{\ln N}\,\ln\bigl(\max\bigl(|L_N|,\, 10^{-300}\bigr)\bigr).
+\end{equation}
+The floor value $10^{-300}$ is well above the IEEE~754 double-precision minimum subnormal
+($\sim 5 \times 10^{-324}$) but far below any physically meaningful value. When
+$|L_N| < 10^{-300}$, the computed $F_1$ is flagged as a sentinel value indicating
+numerical underflow, and the point is marked for investigation with higher precision or
+larger~$N$.
+
+Additionally, any $(\beta, t)$ point where $|L_N| = 0$ exactly (to double precision) is
+recorded separately and not included in the rate function analysis, since it may
+represent either a genuine zero (signaling a DQPT) or a floating-point artifact.
+
+
+\subsection{Grid Discretization Error}
+\label{sec:grid-error}
+
+Zeros detected by bisection on a grid with spacing $\Delta t$ have position error bounded
+by $\Delta t/2$ in the initial detection, refined to arbitrary precision by iterative
+bisection. After $k$ bisection iterations, the position error is
+$\Delta t \cdot 2^{-(k+1)}$. For $\Delta t = 0.1$ and $k = 30$ iterations: position
+error $\sim 10^{-10}$.
+
+In the $\beta$ direction, the grid spacing $\Delta\beta$ determines our ability to
+localize off-critical-line zeros. A zero at $\beta_0$ will be detected (in the sense
+that $|L|$ dips below~$\eps$) only if $\beta_0$ is within $\sim\!\Delta\beta$ of a grid
+point. For $\Delta\beta = 0.05$, we could miss a zero with $\beta_0 = 0.52$ (only $0.02$
+from the critical line). However, the minimum of $|L(\beta, t)|$ over~$t$ is a smooth
+function of~$\beta$, so a zero at $\beta_0 = 0.52$ would also produce a small value at
+the nearest grid point $\beta = 0.50$ (the critical line)---making it detectable, though
+its $\beta$-position would initially be misattributed to~$0.50$. The refinement stage
+(Stage~4) would then resolve its true position.
+
+
+\subsection{False Positive and False Negative Rates}
+\label{sec:false-rates}
+
+\paragraph{False positives} (declaring a zero where none exists) arise from numerical
+artifacts such as:
+\begin{itemize}
+  \item Two nearly-cancelling large terms producing a spuriously small sum.
+  \item Floating-point underflow near a local minimum of $|L|$.
+\end{itemize}
+Mitigation: every detected zero is confirmed by (a)~increasing~$N$, (b)~computing both
+$L$ and~$G$, and (c)~verifying consistency with the Riemann--von Mangoldt zero count.
+
+\paragraph{False negatives} (missing a genuine zero) arise from:
+\begin{itemize}
+  \item Grid spacing too coarse relative to the zero separation.
+  \item Insufficient $N$ causing the partial sum to not resolve the zero.
+\end{itemize}
+Mitigation: grid spacing is chosen to be at most $1/4$ of the expected zero separation
+(Section~\ref{sec:bisection}). The zero count check (Section~\ref{sec:controls},
+Control~3) provides an independent confirmation that no zeros were missed.

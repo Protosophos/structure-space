@@ -4,9 +4,10 @@ This is a learning and test repository for experimenting with code, tools, and A
 
 ## Project structure
 
-- `CODEX.md` - Project guidelines for AI assistants (Codex, Claude, etc.)
-- `CLAUDE.md` - Symbolic link to `CODEX.md`
-- `sofa/` - Mathematical visualizations (Fibonacci, function plotter)
+- `CODEX.md` - Project guidelines for AI assistants (Codex)
+- `CLAUDE.md` - Project guidelines for AI assistants (Claude) - has to be the same like `CODEX.md`
+- `sofa/` - workdir for sofa projects
+- `proto/` - workdir for protosophos projects
 
 ## Guidelines
 
