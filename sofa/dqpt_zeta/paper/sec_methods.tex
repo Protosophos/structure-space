@@ -367,6 +367,41 @@ be precomputed. The argument $\vartheta(t) - t\ln n$ must be reduced modulo $2\p
 carefully to avoid loss of precision for large~$t$ (see Section~\ref{sec:trig} on
 trigonometric evaluation).
 
+\paragraph{Small-$t$ regime and method selection.}
+The RS formula is an asymptotic approximation that improves with increasing~$t$.
+At small heights, the main sum cutoff $M = \lfloor\sqrt{t/(2\pi)}\rfloor$ yields
+very few terms:
+\begin{center}
+\begin{tabular}{@{}rrl@{}}
+\toprule
+$t$ & $M$ & RS viability \\
+\midrule
+$14$ & $1$ & unusable (single term) \\
+$50$ & $2$ & poor \\
+$100$ & $3$ & marginal \\
+$200$ & $5$ & adequate (Gabcke bound applies) \\
+$1000$ & $12$ & good \\
+\bottomrule
+\end{tabular}
+\end{center}
+For $t < 200$ (where the quantitative Gabcke error bound $0.053\,t^{-5/4}$ does not
+apply), we compute the Hardy $Z$-function directly via
+\begin{equation}\label{eq:zh-direct}
+  Z_H(t) = \re\bigl[e^{i\vartheta(t)}\,\zeta\bigl(\tfrac{1}{2}+it\bigr)\bigr],
+\end{equation}
+where $\zeta(1/2+it)$ is obtained from the Borwein-accelerated eta function
+(Section~\ref{sec:dirichlet}) as $\zeta(s) = \eta(s)/(1-2^{1-s})$. This provides
+${\sim}30$ digits of precision independent of~$t$ (Paper Eq.~\ref{eq:borwein-40}).
+For $t \ge 200$, the RS formula~\eqref{eq:rs-formula} with $R_0$ correction is used,
+as it requires only $O(\sqrt{t})$ operations compared to the fixed cost of Borwein
+($n = 100$ terms).
+
+This two-method approach mirrors the strategy of Wei et~al.~\cite{wei2025}, who use
+direct quantum simulation at small~$t$ and note that ``the deviation between estimated
+and exact zeros decreases with increasing~$t$'' due to the improving RS approximation.
+In our classical implementation, the Borwein method replaces the direct quantum
+measurement for small~$t$.
+
 
 \subsection{Zero Detection}
 \label{sec:zero-detection}

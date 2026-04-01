@@ -1,16 +1,9 @@
 .claude/
 *.class
+__pycache__/
+*.pyc
 
 # Gradle
 .gradle/
 .idea
 build/
-
-# LaTeX build artifacts
-*.aux
-*.bbl
-*.blg
-*.log
-*.out
-*.toc
-*.synctex.gz
